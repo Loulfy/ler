@@ -58,8 +58,14 @@ ReadOnlyFile::ReadOnlyFile(const fs::path& path) : m_path(path)
 #endif
 }
 
+#ifdef _WIN32
+static constexpr void* const fd_null = nullptr;
+#else
+static constexpr int fd_null = 0;
+#endif
+
 ReadOnlyFile::ReadOnlyFile(ReadOnlyFile&& other) noexcept
-    : m_path{ std::exchange(other.m_path, {}) }, m_hFile{ std::exchange(other.m_hFile, 0) },
+    : m_path{ std::exchange(other.m_path, {}) }, m_hFile{ std::exchange(other.m_hFile, fd_null) },
       m_size{ std::exchange(other.m_size, 0) }
 {
 }

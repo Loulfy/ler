@@ -13,6 +13,7 @@
 #define VULKAN_HPP_DISPATCH_LOADER_DYNAMIC 1
 #include <vulkan/vulkan.hpp>
 #include <vk_mem_alloc.h>
+#include <semaphore>
 #include <mutex>
 #include <queue>
 #include <set>
@@ -327,7 +328,7 @@ namespace ler::rhi::vulkan
         std::vector<BufferPtr> m_stagings = {};
         mutable std::mutex m_staging_mutex = {};
         sys::Bitset m_staging_bitset;
-        std::binary_semaphore m_semaphore;
+        std::counting_semaphore<> m_semaphore;
 
         using task_container = coro::task_container<coro::thread_pool>;
         std::unique_ptr<task_container> m_scheduler;

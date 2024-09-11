@@ -223,6 +223,11 @@ namespace ler::rhi::d3d12
         return buffer;
     }
 
+    BufferPtr Device::createHostBuffer(uint32_t byteSize)
+    {
+        return createBuffer(byteSize, true);
+    }
+
     TexturePtr Device::createTexture(const TextureDesc& desc)
     {
         auto texture = std::make_shared<Texture>();

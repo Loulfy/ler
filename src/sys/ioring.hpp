@@ -41,6 +41,12 @@ class IoService
         int32_t buffIndex = 0;
     };
 
+    struct BufferInfo
+    {
+        void* address = nullptr;
+        uint32_t length = 0;
+    };
+
     class IoBatchRequest : public std::suspend_always
     {
       public:
@@ -60,8 +66,12 @@ class IoService
     Awaiter submit(FileLoadRequest& request);
     Awaiter submit(std::vector<FileLoadRequest>& request);
 
-    void registerBuffers(std::vector<iovec>& buffers, bool enabled);
+    void registerBuffers(std::vector<BufferInfo>& buffers, bool enabled);
+#ifdef _WIN32
+    void* getMemPtr(int id) const { return m_buffers[id].Address; }
+#else
     void* getMemPtr(int id) const { return m_buffers[id].iov_base; }
+#endif
 
   private:
     void worker(const std::stop_token& stoken);
@@ -72,6 +82,7 @@ class IoService
     bool m_useFixedBuffer = false;
     std::vector<HANDLE> m_handles;
 #ifdef _WIN32
+    HIORING m_ring = nullptr;
     std::vector<IORING_BUFFER_INFO> m_buffers;
 #else
     io_uring m_ring = {};

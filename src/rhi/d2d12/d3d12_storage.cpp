@@ -141,7 +141,7 @@ void Storage::submitSync()
     CloseHandle(event);
 }
 
-async::task<TexturePtr> Storage::asyncLoadTexture(const ReadOnlyFilePtr& file)
+/*async::task<TexturePtr> Storage::asyncLoadTexture(const ReadOnlyFilePtr& file)
 {
     TexturePtr texture;
 
@@ -287,9 +287,9 @@ async::task<Result> Storage::asyncLoadBuffer(const ReadOnlyFilePtr& file, Buffer
     co_await submitAwaitable();
 
     co_return { true, "" };
-}
+}*/
 
-void Storage::requestLoadTexture(coro::latch& latch, TexturePoolPtr& texturePool, const ReadOnlyFilePtr& file)
+void Storage::requestLoadTexture(coro::latch& latch, TexturePoolPtr& texturePool, const std::span<ReadOnlyFilePtr>& files)
 {
 
 }

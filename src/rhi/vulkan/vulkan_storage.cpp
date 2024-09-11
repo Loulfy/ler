@@ -31,7 +31,7 @@ Storage::Storage(const VulkanContext& context, Device* device, std::shared_ptr<c
       m_ios(tp)
 {
     m_scheduler = std::make_unique<task_container>(tp);
-    std::vector<iovec> buffers;
+    std::vector<sys::IoService::BufferInfo> buffers;
     for (int i = 0; i < 8; ++i)
     {
         BufferPtr staging = device->createHostBuffer(kStagingSize);

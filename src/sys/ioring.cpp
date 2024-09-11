@@ -61,27 +61,26 @@ void IoService::IoBatchRequest::await_suspend(std::coroutine_handle<> handle) no
     service->enqueue(*this);
 }
 
-void IoService::registerBuffers(std::vector<iovec>& buffers, bool enabled)
+void IoService::registerBuffers(std::vector<BufferInfo>& buffers, bool enabled)
 {
     m_useFixedBuffer = enabled;
-    m_buffers = std::move(buffers);
+    for(const BufferInfo& b : buffers)
+        m_buffers.emplace_back(b.address, b.length);
     if(enabled)
     {
+#ifdef _WIN32
+        const int res = BuildIoRingRegisterBuffers(m_ring, m_buffers.size(), m_buffers.data(), 0);
+#else
         const int res = io_uring_register_buffers(&m_ring, m_buffers.data(), m_buffers.size());
+#endif
         assert(res == 0);
     }
-}
-
-template<typename T> T align(T size, T alignment)
-{
-    return (size + alignment - 1) & ~(alignment - 1);
 }
 
 void IoService::worker(const std::stop_token& stoken)
 {
 #ifdef _WIN32
     IORING_CQE cqe;
-    HIORING ring = nullptr;
     IORING_CAPABILITIES capabilities;
     HRESULT res = QueryIoRingCapabilities(&capabilities);
     assert(res == S_OK);
@@ -89,7 +88,7 @@ void IoService::worker(const std::stop_token& stoken)
     IORING_CREATE_FLAGS flags;
     flags.Required = IORING_CREATE_REQUIRED_FLAGS_NONE;
     flags.Advisory = IORING_CREATE_ADVISORY_FLAGS_NONE;
-    res = CreateIoRing(capabilities.MaxVersion, flags, 0x10000, 0x20000, &ring);
+    res = CreateIoRing(capabilities.MaxVersion, flags, 0x10000, 0x20000, &m_ring);
     assert(res == S_OK);
 
     IoBatchRequest batch;
@@ -103,7 +102,7 @@ void IoService::worker(const std::stop_token& stoken)
 
             if (stoken.stop_requested())
             {
-                CloseIoRing(ring);
+                CloseIoRing(m_ring);
                 return;
             }
 
@@ -112,35 +111,36 @@ void IoService::worker(const std::stop_token& stoken)
         }
 
         m_handles.clear();
-        m_buffers.clear();
-        for (FileLoadRequest& req : batch.requests)
-        {
-            auto* f = static_cast<ReadOnlyFile*>(req.file);
-            m_handles.emplace_back(f->getNativeHandle());
-            m_buffers.emplace_back(req.buffAddress, req.fileLength);
-        }
+        for (const FileLoadRequest& req : batch.requests)
+            m_handles.emplace_back(req.file->getNativeHandle());
 
-        res = BuildIoRingRegisterFileHandles(ring, m_handles.size(), m_handles.data(), 0);
-        res = BuildIoRingRegisterBuffers(ring, m_buffers.size(), m_buffers.data(), 0);
+        res = BuildIoRingRegisterFileHandles(m_ring, m_handles.size(), m_handles.data(), 0);
 
         for (uint32_t index = 0; index < batch.requests.size(); ++index)
         {
             FileLoadRequest& req = batch.requests[index];
 
             IORING_HANDLE_REF handleRef(index);
-            IORING_BUFFER_REF bufferRef(index, req.buffOffset);
+            IORING_BUFFER_REF bufferRef(nullptr);
+            if(m_useFixedBuffer)
+                bufferRef = IORING_BUFFER_REF(req.buffIndex, req.buffOffset);
+            else
+            {
+                auto* data = static_cast<std::byte*>(m_buffers[req.buffIndex].Address);
+                bufferRef = IORING_BUFFER_REF(data + req.buffOffset);
+            }
 
-            res = BuildIoRingReadFile(ring, handleRef, bufferRef, req.fileLength, req.fileOffset, 0, IOSQE_FLAGS_NONE);
+            res = BuildIoRingReadFile(m_ring, handleRef, bufferRef, req.fileLength, req.fileOffset, 0, IOSQE_FLAGS_NONE);
             if (FAILED(res))
             {
                 throw std::runtime_error("[IoRing] Failed building IO ring read file structure: " + getErrorMsg(res));
             }
         }
 
-        res = SubmitIoRing(ring, m_handles.size(), INFINITE, &submittedEntries);
+        res = SubmitIoRing(m_ring, m_handles.size(), INFINITE, &submittedEntries);
         assert(res == S_OK);
 
-        while (PopIoRingCompletion(ring, &cqe) == S_OK)
+        while (PopIoRingCompletion(m_ring, &cqe) == S_OK)
         {
             if (FAILED(cqe.ResultCode))
             {

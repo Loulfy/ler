@@ -267,6 +267,15 @@ namespace ler::rhi::vulkan
         #endif
     }
 
+    static void* aligned_malloc(size_t size, size_t align)
+    {
+        #ifdef _WIN32
+            return _aligned_malloc(size, align);
+        #else
+            return aligned_alloc(align, free);
+        #endif
+    }
+
     Buffer::~Buffer()
     {
         if(allocation)
@@ -317,7 +326,7 @@ namespace ler::rhi::vulkan
         vk::MemoryRequirements memRequirements;
         m_context.device.getBufferMemoryRequirements(buffer->handle, &memRequirements);
 
-        void* hostPtr = aligned_alloc(m_context.hostPointerAlignment, byteSize);
+        void* hostPtr = aligned_malloc(byteSize, m_context.hostPointerAlignment);
         const vk::MemoryHostPointerPropertiesEXT hostProps = m_context.device.getMemoryHostPointerPropertiesEXT(
             vk::ExternalMemoryHandleTypeFlagBits::eHostAllocationEXT, hostPtr);
 

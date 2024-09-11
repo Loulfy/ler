@@ -119,7 +119,7 @@ namespace ler::app
 
             m_swapChain->present([&](rhi::TexturePtr& backBuffer, rhi::CommandPtr& command){
                 command->addImageBarrier(backBuffer, rhi::RenderTarget);
-                command->clearColorImage(backBuffer, rhi::Color::Green);
+                //command->clearColorImage(backBuffer, rhi::Color::Green);
                 /*if(m_meshBuffers.isLoaded())
                 {
                     m_renderGraph.rebind();

@@ -4,8 +4,9 @@
 
 #include "rhi/rhi.hpp"
 
-//#include <d3d12shader.h>
-//#include <d3dx12.h>
+#ifdef _WIN32
+#include <d3d12shader.h>
+#endif
 #include <dxcapi.h>
 #include <fstream>
 
@@ -209,7 +210,7 @@ static void compileShaderHlsl(const ShaderModule& shaderModule, const fs::path& 
 
     // Load the shader source file to a blob.
     IDxcBlobEncoding* sourceBlob;
-    std::wstring source = sys::toUtf16(path);
+    std::wstring source = sys::toUtf16(path.string());
     HRESULT hr = utils->LoadFile(source.c_str(), nullptr, &sourceBlob);
     if (FAILED(hr))
         log::error("Failed to open shader with path : {}", shaderModule.path.string());

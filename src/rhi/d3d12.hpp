@@ -337,11 +337,8 @@ namespace ler::rhi::d3d12
         void update() override;
         ReadOnlyFilePtr openFile(const fs::path& path) override;
         std::vector<ReadOnlyFilePtr> openFiles(const fs::path& path, const fs::path& ext) override;
-        async::task<TexturePtr> asyncLoadTexture(const ReadOnlyFilePtr& file) override;
-        async::task<Result> asyncLoadTexturePool(const std::vector<ReadOnlyFilePtr>& files, TexturePoolPtr& texturePool) override;
-        async::task<Result> asyncLoadBuffer(const ReadOnlyFilePtr& file, BufferPtr& buffer, uint32_t fileLength, uint32_t fileOffset) override;
 
-        void requestLoadTexture(coro::latch& latch, TexturePoolPtr& texturePool, const ReadOnlyFilePtr& file) override;
+        void requestLoadTexture(coro::latch& latch, TexturePoolPtr& texturePool, const std::span<ReadOnlyFilePtr>& files) override;
         void requestLoadBuffer(coro::latch& latch, const ReadOnlyFilePtr& file, BufferPtr& buffer, uint32_t fileLength, uint32_t fileOffset) override;
 
         //private:
@@ -373,6 +370,7 @@ namespace ler::rhi::d3d12
         // Buffer
         BufferPtr createBuffer(uint32_t byteSize, bool staging) override;
         BufferPtr createBuffer(const BufferDesc& desc) override;
+        BufferPtr createHostBuffer(uint32_t byteSize) override;
 
         // Texture
         TexturePtr createTexture(const TextureDesc& desc) override;
