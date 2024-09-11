@@ -1,0 +1,72 @@
+[
+  {
+    "name": "quad",
+    "path": "quad_dx.hlsl",
+    "entryPoint": "PSMain",
+    "stage": "Pixel",
+    "backend": "d3d12"
+  },
+  {
+    "name": "quad",
+    "path": "quad_dx.hlsl",
+    "entryPoint": "VSMain",
+    "stage": "Vertex",
+    "backend": "d3d12"
+  },
+  {
+    "name": "quad",
+    "path": "quad_vk.hlsl",
+    "entryPoint": "PSMain",
+    "stage": "Pixel",
+    "backend": "vulkan"
+  },
+  {
+    "name": "quad",
+    "path": "quad_vk.hlsl",
+    "entryPoint": "VSMain",
+    "stage": "Vertex",
+    "backend": "vulkan"
+  },
+  {
+    "name": "mesh",
+    "path": "mesh_dx.hlsl",
+    "entryPoint": "VSMain",
+    "stage": "Vertex",
+    "backend": "d3d12"
+  },
+  {
+    "name": "mesh",
+    "path": "mesh_dx.hlsl",
+    "entryPoint": "PSMain",
+    "stage": "Pixel",
+    "backend": "d3d12"
+  },
+  {
+    "name": "mesh",
+    "path": "mesh.vert.glsl",
+    "entryPoint": "main",
+    "stage": "Vertex",
+    "backend": "vulkan"
+  },
+  {
+    "name": "mesh",
+    "path": "mesh.frag.glsl",
+    "entryPoint": "main",
+    "stage": "Pixel",
+    "backend": "vulkan"
+  },
+  {
+    "name": "cull",
+    "path": "cull_dx.hlsl",
+    "entryPoint": "CSMain",
+    "stage": "Compute",
+    "backend": "d3d12"
+  },
+  {
+    "name": "cull",
+    "path": "cull_vk.hlsl",
+    "entryPoint": "CSMain",
+    "stage": "Compute",
+    "backend": "vulkan"
+  }
+]

@@ -1,0 +1,77 @@
+{
+  "name": "Wireframe",
+  "passes": [
+    {
+      "name": "ForwardIndexed",
+      "pass": "graphics",
+      "resources": [
+        {
+          "type": "renderTarget",
+          "name": "color",
+          "binding": 0
+        },
+        {
+          "type": "depthWrite",
+          "name": "depth",
+          "binding": 1
+        },
+        {
+          "type": "constantBuffer",
+          "name": "ubo",
+          "binding": 0
+        },
+        {
+          "type": "readOnlyBuffer",
+          "name": "instances",
+          "binding": 1
+        },
+        {
+          "type": "readOnlyBuffer",
+          "name": "materials",
+          "binding": 2
+        },
+        {
+          "type": "sampledTexture",
+          "name": "textures",
+          "binding": 4
+        },
+        {
+          "type": "readOnlyBuffer",
+          "name": "draws",
+          "binding": 3
+        },
+        {
+          "type": "readOnlyBuffer",
+          "name": "count",
+          "binding": -1
+        }
+      ]
+    },
+    {
+      "pass": "compute",
+      "name": "CullingCommand",
+      "resources": [
+        {
+          "type": "readOnlyBuffer",
+          "name": "instances",
+          "binding": 0
+        },
+        {
+          "type": "readOnlyBuffer",
+          "name": "meshes",
+          "binding": 1
+        },
+        {
+          "type": "storageBuffer",
+          "name": "draws",
+          "binding": 2
+        },
+        {
+          "type": "storageBuffer",
+          "name": "count",
+          "binding": 3
+        }
+      ]
+    }
+  ]
+}

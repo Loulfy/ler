@@ -1,0 +1,77 @@
+namespace ler.scene;
+
+struct Mat4 {
+    data:[float:16];
+}
+
+struct Vec3 {
+    x:float;
+    y:float;
+    z:float;
+}
+
+struct Instance {
+    mesh_id:uint32;
+    skin_id:uint32;
+    transform:[float:16];
+}
+
+struct Meshlet
+{
+    vert_count:uint32;
+    vert_offset:uint32;
+    prim_count:uint32;
+    prim_offset:uint32;
+}
+
+struct CullData
+{
+    bounding_sphere:Vec3;
+    normal_cone:uint32;
+    apex_offset:float;
+}
+
+struct MeshInfo
+{
+    index_count:uint32;
+    meshlet_count:uint32;
+
+    last_meshlet_vert_count:uint32;
+    last_meshlet_prim_count:uint32;
+
+    first_index:uint32;
+    meshlet_offset:uint32;
+}
+
+struct Mesh {
+    count_index:uint32;
+    first_index:uint32;
+    first_vertex:int32;
+    count_vertex:uint32;
+    bbmin:Vec3;
+    bbmax:Vec3;
+}
+
+enum BufferType : byte { Index = 0, Position, Texcoord, Normal, Tangent }
+
+struct Buffer {
+    byte_length:uint32;
+    byte_offset:uint32;
+    type:BufferType;
+}
+
+table Material {
+    normal:string;
+    diffuse:string;
+    roughness:string;
+    occlusion:string;
+}
+
+table Scene {
+    instances:[Instance];
+    materials:[Material];
+    buffers:[Buffer];
+    meshes:[Mesh];
+}
+
+root_type Scene;
