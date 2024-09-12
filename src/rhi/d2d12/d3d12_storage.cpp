@@ -2,7 +2,8 @@
 
 namespace ler::rhi::d3d12
 {
-Storage::Storage(const D3D12Context& context) : m_context(context)
+Storage::Storage(Device* device, std::shared_ptr<coro::thread_pool>& tp)
+    : CommonStorage(device, tp), m_context(device->getContext())
 {
     // Create a DirectStorage queue which will be used to load data into a
     // buffer on the GPU.
@@ -10,14 +11,19 @@ Storage::Storage(const D3D12Context& context) : m_context(context)
     queueDesc.Capacity = DSTORAGE_MAX_QUEUE_CAPACITY;
     queueDesc.Priority = DSTORAGE_PRIORITY_HIGH;
     queueDesc.SourceType = DSTORAGE_REQUEST_SOURCE_FILE;
-    queueDesc.Device = context.device;
+    queueDesc.Device = m_context.device;
 
-    context.storage->SetStagingBufferSize(256 * 1024 * 1024);
-    context.storage->CreateQueue(&queueDesc, IID_PPV_ARGS(&queue));
-}
+    m_context.storage->SetStagingBufferSize(256 * 1024 * 1024);
+    m_context.storage->CreateQueue(&queueDesc, IID_PPV_ARGS(&queue));
 
-Storage::~Storage()
-{
+    for (const BufferPtr& staging : m_stagings)
+    {
+        auto* buff = checked_cast<Buffer*>(staging.get());
+        void* pMappedData;
+        buff->handle->Map(0, nullptr, &pMappedData);
+        auto* data = static_cast<std::byte*>(pMappedData);
+        buffers.emplace_back(buff->handle, data);
+    }
 }
 
 ReadOnlyFilePtr Storage::openFile(const fs::path& path)
@@ -28,107 +34,7 @@ ReadOnlyFilePtr Storage::openFile(const fs::path& path)
     return file;
 }
 
-std::vector<ReadOnlyFilePtr> Storage::openFiles(const fs::path& path, const fs::path& ext)
-{
-    std::vector<ReadOnlyFilePtr> files;
-    for (const fs::directory_entry& entry : fs::directory_iterator(path))
-    {
-        if (entry.is_regular_file() && entry.path().extension() == ext)
-            files.emplace_back(openFile(entry.path()));
-    }
-    return files;
-}
-
-void Storage::update()
-{
-    m_requests.remove_if([](StorageRequest& req) {
-        if (req.status && req.status->IsComplete(0))
-        {
-            req.handle.resume();
-            return true;
-        }
-        return false;
-    });
-}
-
-img::KtxTexture* Storage::enqueueLoadKtx(const ReadOnlyFilePtr& file)
-{
-    auto* f = checked_cast<ReadOnlyFile*>(file.get());
-
-    BY_HANDLE_FILE_INFORMATION info;
-    f->handle.Get()->GetFileInformation(&info);
-    assert(info.nFileSizeLow > img::KtxTexture::kBytesToRead);
-
-    KtxAllocator alloc(&m_memory);
-    auto* image = alloc.new_object<img::KtxTexture>();
-
-    DSTORAGE_REQUEST request = {};
-    request.Options.SourceType = DSTORAGE_REQUEST_SOURCE_FILE;
-    request.Options.DestinationType = DSTORAGE_REQUEST_DESTINATION_MEMORY;
-    request.Options.CompressionFormat = DSTORAGE_COMPRESSION_FORMAT_NONE;
-    request.Source.File.Source = f->handle.Get();
-    request.Source.File.Offset = 0;
-    request.Source.File.Size = img::KtxTexture::kBytesToRead;
-    request.Destination.Memory.Buffer = image->identifier;
-    request.Destination.Memory.Size = img::KtxTexture::kBytesToRead;
-    queue->EnqueueRequest(&request);
-
-    return image;
-}
-
-img::DdsTexture* Storage::enqueueLoadDds(const ReadOnlyFilePtr& file)
-{
-    auto* f = checked_cast<ReadOnlyFile*>(file.get());
-
-    BY_HANDLE_FILE_INFORMATION info;
-    f->handle.Get()->GetFileInformation(&info);
-    assert(info.nFileSizeLow > img::DdsTexture::kBytesToRead);
-
-    KtxAllocator alloc(&m_memory);
-    auto* image = alloc.new_object<img::DdsTexture>();
-
-    DSTORAGE_REQUEST request = {};
-    request.Options.SourceType = DSTORAGE_REQUEST_SOURCE_FILE;
-    request.Options.DestinationType = DSTORAGE_REQUEST_DESTINATION_MEMORY;
-    request.Options.CompressionFormat = DSTORAGE_COMPRESSION_FORMAT_NONE;
-    request.Source.File.Source = f->handle.Get();
-    request.Source.File.Offset = 0;
-    request.Source.File.Size = img::DdsTexture::kBytesToRead;
-    request.Destination.Memory.Buffer = &image->ddsMagic;
-    request.Destination.Memory.Size = img::DdsTexture::kBytesToRead;
-    queue->EnqueueRequest(&request);
-
-    return image;
-}
-
-void Storage::enqueueLoadTex(const ReadOnlyFilePtr& file, BufferPtr& staging, img::ITexture* tex, uint32_t offset) const
-{
-    auto* f = checked_cast<ReadOnlyFile*>(file.get());
-
-    DSTORAGE_REQUEST request = {};
-    request.Options.DestinationType = DSTORAGE_REQUEST_DESTINATION_BUFFER;
-    request.Source.File.Source = f->handle.Get();
-    request.Source.File.Offset = tex->headOffset();
-    request.Source.File.Size = tex->getDataSize();
-    request.Destination.Buffer.Resource = checked_cast<Buffer*>(staging.get())->handle;
-    request.Destination.Buffer.Offset = offset;
-    request.Destination.Buffer.Size = tex->getDataSize();
-
-    queue->EnqueueRequest(&request);
-}
-
-Storage::IoReadAwaiter Storage::submitAwaitable()
-{
-    StorageRequest& batch = m_requests.emplace_back();
-    HRESULT hr = m_context.storage->CreateStatusArray(1, "", IID_PPV_ARGS(&batch.status));
-    assert(SUCCEEDED(hr));
-    queue->EnqueueStatus(batch.status.Get(), 0);
-    queue->Submit();
-
-    return IoReadAwaiter(&m_requests.back());
-}
-
-void Storage::submitSync()
+void Storage::submitWait()
 {
     ComPtr<ID3D12Fence> fence;
     m_context.device->CreateFence(0, D3D12_FENCE_FLAG_NONE, IID_PPV_ARGS(&fence));
@@ -139,138 +45,166 @@ void Storage::submitSync()
     queue->Submit();
     WaitForSingleObjectEx(event, INFINITE, FALSE);
     CloseHandle(event);
-}
-
-/*async::task<TexturePtr> Storage::asyncLoadTexture(const ReadOnlyFilePtr& file)
-{
-    TexturePtr texture;
-
-    img::ITexture* image = enqueueLoadKtx(file);
-
-    //co_await submitAwaitable();
-    submitSync();
-
-    image->init();
-
-    img::ITexture* tex = image;
-    std::span levels = tex->levels();
-    TextureDesc desc = tex->desc();
-    desc.debugName = file->getFilename();
-    texture = m_device->createTexture(desc);
-
-    auto command = m_device->createCommand(QueueType::Transfer);
-    auto staging = m_device->createBuffer(tex->getDataSize(), true);
-
-    uint32_t head = tex->headOffset();
-    for (const size_t mip : std::views::iota(0u, levels.size()))
-    {
-        const img::ITexture::LevelIndexEntry& level = levels[mip];
-        // log::info("byteOffset = {}, byteLength = {}", level.byteOffset, level.byteLength);
-
-        Subresource sub;
-        sub.index = mip;
-        sub.offset = level.byteOffset - head;
-        sub.width = desc.width >> mip;
-        sub.height = desc.height >> mip;
-        sub.rowPitch = tex->getRowPitch(mip);
-        command->copyBufferToTexture(staging, texture, sub, nullptr);
-    }
-
-    enqueueLoadTex(file, staging, image, 0);
-
-    // co_await submitAwaitable();
-    submitSync();
-
-    // m_device->submitCommand(command);
-    // co_await SubmitAsync(command);
-    m_device->submitOneShot(command);
-
-    co_return texture;
-}
-
-async::task<Result> Storage::asyncLoadTexturePool(const std::vector<ReadOnlyFilePtr>& files,
-                                                  TexturePoolPtr& texturePool)
-{
-    auto pool = texturePool.get();
-    auto images = std::make_unique<std::vector<img::ITexture*>>();
-    images->reserve(files.size());
-    for (auto& f : files)
-    {
-        if (f->getFilename().ends_with(".dds") || f->getFilename().ends_with(".DDS"))
-            images->emplace_back(enqueueLoadDds(f));
-        else if (f->getFilename().ends_with(".ktx"))
-            images->emplace_back(enqueueLoadKtx(f));
-    }
-
-    co_await submitAwaitable();
 
     DSTORAGE_ERROR_RECORD errorRecord = {};
     queue->RetrieveErrorRecord(&errorRecord);
     if (FAILED(errorRecord.FirstFailure.HResult))
     {
-        //
         // errorRecord.FailureCount - The number of failed requests in the queue since the last
         //                            RetrieveErrorRecord call.
         // errorRecord.FirstFailure - Detailed record about the first failed command in the enqueue order.
-        //
         log::error("The DirectStorage request failed! HRESULT={}", errorRecord.FirstFailure.HResult);
         log::error(getErrorMsg(errorRecord.FirstFailure.HResult));
     }
+}
 
-    uint32_t byteSize = 0;
-    for (img::ITexture* img : *images)
+static void queueTexture(const ReadOnlyFilePtr& file, DSTORAGE_REQUEST& req)
+{
+    const fs::path filename(file->getFilename());
+    std::string ext = filename.extension().string();
+    std::ranges::transform(ext, ext.begin(), ::tolower);
+
+    req.Options.SourceType = DSTORAGE_REQUEST_SOURCE_FILE;
+    req.Options.DestinationType = DSTORAGE_REQUEST_DESTINATION_BUFFER;
+    req.Options.CompressionFormat = DSTORAGE_COMPRESSION_FORMAT_NONE;
+    req.Source.File.Source = checked_cast<ReadOnlyFile*>(file.get())->handle.Get();
+    req.Source.File.Offset = 0;
+    req.Source.File.Size = img::KtxTexture::kBytesToRead;
+    req.Destination.Buffer.Offset = 0;
+    req.Destination.Buffer.Size = 0;
+
+    if (ext == ".dds")
+        req.Source.File.Size = img::DdsTexture::kBytesToRead;
+    else if (ext == ".ktx" || ext == ".ktx2")
+        req.Source.File.Size = img::KtxTexture::kBytesToRead;
+}
+
+coro::task<> Storage::makeSingleTextureTask(coro::latch& latch, TexturePoolPtr texturePool, ReadOnlyFilePtr file)
+{
+    TexturePtr texture;
+    DSTORAGE_REQUEST request = {};
+    queueTexture(file, request);
+    int bufferIndex = acquireStaging();
+    request.Destination.Buffer.Resource = buffers[bufferIndex].first;
+    request.Destination.Buffer.Size = file->sizeBytes();
+    request.Source.File.Size = file->sizeBytes();
+    queue->EnqueueRequest(&request);
+
+    submitWait();
+
+    img::ITexture* tex = factoryTexture(file, buffers[bufferIndex].second);
+
+    TextureDesc desc = tex->desc();
+    std::span levels = tex->levels();
+    uint32_t head = tex->headOffset();
+    desc.debugName = file->getFilename();
+    texture = m_device->createTexture(desc);
+    uint32_t texId = texturePool->allocate();
+    texturePool->setTexture(texture, texId);
+
+    CommandPtr cmd = m_device->createCommand(QueueType::Transfer);
+    for (const size_t mip : std::views::iota(0u, levels.size()))
     {
-        img->init();
-        byteSize += img->getDataSize();
+        const img::ITexture::LevelIndexEntry& level = levels[mip];
+        log::info("byteOffset = {}, byteLength = {}", level.byteOffset, level.byteLength);
+
+        Subresource sub;
+        sub.index = mip;
+        sub.offset = level.byteOffset;
+        sub.width = desc.width >> mip;
+        sub.height = desc.height >> mip;
+        sub.rowPitch = tex->getRowPitch(mip);
+        cmd->copyBufferToTexture(getStaging(bufferIndex), texture, sub, nullptr);
     }
 
-    CommandPtr command = m_device->createCommand(QueueType::Transfer);
-    BufferPtr staging = m_device->createBuffer(byteSize, true);
+    m_device->submitOneShot(cmd);
 
-    uint32_t offset = 0;
+    latch.count_down();
+    releaseStaging(bufferIndex);
+
+    co_return;
+}
+
+coro::task<> Storage::makeMultiTextureTask(coro::latch& latch, TexturePoolPtr texturePool,
+                                           std::vector<ReadOnlyFilePtr> files)
+{
+    std::vector<uint32_t> stagings;
+
+    constexpr uint32_t capacity = kStagingSize;
+    uint32_t offset = capacity;
+    int bufferId;
+
+    // std::vector<img::ITexture*> images;
+    // images.reserve(files.size());
+    std::vector<DSTORAGE_REQUEST> requests(files.size());
+    for (int i = 0; i < files.size(); ++i)
+    {
+        queueTexture(files[i], requests[i]);
+        const uint32_t byteSizes = align(files[i]->sizeBytes(), 16u);
+
+        if (offset + byteSizes > capacity)
+        {
+            offset = 0;
+            bufferId = acquireStaging();
+            stagings.emplace_back(bufferId);
+        }
+
+        requests[i].Destination.Buffer.Offset = offset;
+        requests[i].Destination.Buffer.Resource = buffers[bufferId].first;
+        requests[i].Destination.Buffer.Size = files[i]->sizeBytes();
+        requests[i].Source.File.Size = files[i]->sizeBytes();
+        queue->EnqueueRequest(&requests[i]);
+
+        offset += byteSizes;
+    }
+
+    submitWait();
+
+    CommandPtr cmd = m_device->createCommand(QueueType::Transfer);
+
     for (size_t i = 0; i < files.size(); ++i)
     {
-        auto& file = files[i];
-        img::ITexture* tex = images->at(i);
+        const auto& file = files[i];
+        const DSTORAGE_REQUEST& req = requests[i];
+        std::byte* data = buffers[0].second;
+        // img::ITexture* tex = images[i];
+        // tex->initFromBuffer(data + req.buffOffset);
+        img::ITexture* tex = factoryTexture(file, data + req.Destination.Buffer.Offset);
         std::span levels = tex->levels();
         TextureDesc desc = tex->desc();
         desc.debugName = file->getFilename();
 
         log::info("Load texture: {}", desc.debugName);
-        auto texture = m_device->createTexture(desc);
-        uint32_t texIndex = pool->allocate();
+        TexturePtr texture = m_device->createTexture(desc);
+        uint32_t texIndex = texturePool->allocate();
+        texturePool->setTexture(texture, texIndex);
 
-        uint32_t head = tex->headOffset();
         for (const size_t mip : std::views::iota(0u, levels.size()))
         {
             const img::ITexture::LevelIndexEntry& level = levels[mip];
-            // log::debug("byteOffset = {}, byteLength = {}", level.byteOffset, level.byteLength);
+            // log::info("byteOffset = {}, byteLength = {}", level.byteOffset, level.byteLength);
 
             Subresource sub;
             sub.index = mip;
-            sub.offset = level.byteOffset - head + offset;
+            sub.offset = level.byteOffset + req.Destination.Buffer.Offset;
             sub.width = desc.width >> mip;
             sub.height = desc.height >> mip;
             sub.rowPitch = tex->getRowPitch(mip);
-            command->copyBufferToTexture(staging, texture, sub, nullptr);
+            cmd->copyBufferToTexture(getStaging(0), texture, sub, nullptr);
         }
-
-        enqueueLoadTex(file, staging, tex, offset);
-        pool->setTexture(texture, texIndex);
-        offset += tex->getDataSize();
     }
 
-    co_await submitAwaitable();
+    m_device->submitOneShot(cmd);
 
-    // m_device->submitCommand(command);
-    // co_await SubmitAsync(command);
-    m_device->submitOneShot(command);
+    latch.count_down();
+    for (const uint32_t buffId : stagings)
+        releaseStaging(buffId);
 
-    co_return { true, "" };
+    co_return;
 }
 
-async::task<Result> Storage::asyncLoadBuffer(const ReadOnlyFilePtr& file, BufferPtr& buffer, uint32_t fileLength,
-                                             uint32_t fileOffset)
+coro::task<> Storage::makeBufferTask(coro::latch& latch, const ReadOnlyFilePtr& file, BufferPtr& buffer,
+                                     uint32_t fileLength, uint32_t fileOffset)
 {
     auto* f = checked_cast<ReadOnlyFile*>(file.get());
 
@@ -284,18 +218,9 @@ async::task<Result> Storage::asyncLoadBuffer(const ReadOnlyFilePtr& file, Buffer
     request.Destination.Buffer.Size = fileLength;
     queue->EnqueueRequest(&request);
 
-    co_await submitAwaitable();
+    submitWait();
+    latch.count_down();
 
-    co_return { true, "" };
-}*/
-
-void Storage::requestLoadTexture(coro::latch& latch, TexturePoolPtr& texturePool, const std::span<ReadOnlyFilePtr>& files)
-{
-
-}
-
-void Storage::requestLoadBuffer(coro::latch& latch, const ReadOnlyFilePtr& file, BufferPtr& buffer, uint32_t fileLength, uint32_t fileOffset)
-{
-
+    co_return;
 }
 } // namespace ler::rhi::d3d12

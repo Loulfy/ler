@@ -163,13 +163,13 @@ namespace ler::rhi::d3d12
                 }
             }
 
-            auto path = sys::ASSETS_DIR / "grid01.ktx";
+            /*auto path = sys::ASSETS_DIR / "grid01.ktx";
             ComPtr<IDStorageFile> file;
             hr = m_dStorage->OpenFile(path.c_str(), IID_PPV_ARGS(&file));
             if (FAILED(hr))
             {
                 log::error("shit");
-            }
+            }*/
 
             // Enqueue a request to read the file contents into a destination D3D12 buffer resource.
             // Note: The example request below is performing a single read of the entire file contents.

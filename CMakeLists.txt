@@ -50,6 +50,7 @@ set(SRC
     "src/rhi/queue.hpp"
     "src/rhi/queue.cpp"
     "src/rhi/storage.hpp"
+    "src/rhi/storage.cpp"
     "src/app/desktop.hpp"
     "src/app/desktop.cpp"
     "src/rhi/shader/compiler.cpp"

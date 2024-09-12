@@ -46,7 +46,7 @@ namespace ler::rhi::d3d12
 
     Device::~Device()
     {
-        //m_storage.reset();
+        m_storage.reset();
         m_allocator->Release();
     }
 
@@ -129,8 +129,9 @@ namespace ler::rhi::d3d12
 
         m_context.queue = m_queues[int(QueueType::Graphics)]->m_commandQueue.Get();
 
-        m_storage = std::make_shared<Storage>(m_context);
-        m_storage->m_device = this;
+        m_threadPool = std::make_shared<coro::thread_pool>(coro::thread_pool::options{ .thread_count = 8 });
+
+        m_storage = std::make_shared<StorageTest>(this, m_threadPool);
     }
 
     void Buffer::uploadFromMemory(const void* src, uint32_t byteSize) const

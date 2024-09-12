@@ -246,8 +246,7 @@ namespace ler::rhi::vulkan
 
         m_threadPool = std::make_shared<coro::thread_pool>(coro::thread_pool::options{ .thread_count = 8 });
 
-        m_storage = std::make_shared<Storage>(m_context, this, m_threadPool);
-        m_storage->m_device = this;
+        m_storage = std::make_shared<Storage>(this, m_threadPool);
     }
 
     void Buffer::uploadFromMemory(const void* src, uint32_t byteSize) const

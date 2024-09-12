@@ -318,46 +318,21 @@ namespace ler::rhi::d3d12
     };
 
     class Device;
-    class Storage : public IStorage
+    class Storage : public CommonStorage
     {
-    public:
-
-        struct IoReadAwaiter
-        {
-            StorageRequest* batch = nullptr;
-
-            explicit IoReadAwaiter(StorageRequest* batch) : batch{batch} {}
-            [[nodiscard]] bool await_ready() const noexcept { return false; }
-            void await_suspend(std::coroutine_handle<> handle) noexcept { batch->handle = handle; }
-            void await_resume() const noexcept {}
-        };
-
-        ~Storage() override;
-        explicit Storage(const D3D12Context& context);
-        void update() override;
+      public:
+        Storage(Device* device, std::shared_ptr<coro::thread_pool>& tp);
         ReadOnlyFilePtr openFile(const fs::path& path) override;
-        std::vector<ReadOnlyFilePtr> openFiles(const fs::path& path, const fs::path& ext) override;
 
-        void requestLoadTexture(coro::latch& latch, TexturePoolPtr& texturePool, const std::span<ReadOnlyFilePtr>& files) override;
-        void requestLoadBuffer(coro::latch& latch, const ReadOnlyFilePtr& file, BufferPtr& buffer, uint32_t fileLength, uint32_t fileOffset) override;
-
-        //private:
-
-        img::KtxTexture* enqueueLoadKtx(const ReadOnlyFilePtr& file);
-        img::DdsTexture* enqueueLoadDds(const ReadOnlyFilePtr& file);
-        void enqueueLoadTex(const ReadOnlyFilePtr& file, BufferPtr& staging, img::ITexture* tex, uint32_t offset) const;
-        IoReadAwaiter submitAwaitable();
-        void submitSync();
-
-        Device* m_device = nullptr;
-        ComPtr<IDStorageQueue> queue;
+      private:
         const D3D12Context& m_context;
+        ComPtr<IDStorageQueue> queue;
+        std::vector<std::pair<ID3D12Resource*,std::byte*>> buffers;
 
-        std::list<StorageRequest> m_requests;
-
-        using KtxAllocator = std::pmr::polymorphic_allocator<img::DdsTexture>;
-        std::unique_ptr<std::byte[]> m_buffer = std::make_unique<std::byte[]>(sys::C04Mio);
-        std::pmr::monotonic_buffer_resource m_memory;
+        void submitWait();
+        coro::task<> makeSingleTextureTask(coro::latch& latch, TexturePoolPtr texturePool, ReadOnlyFilePtr file) override;
+        coro::task<> makeMultiTextureTask(coro::latch& latch, TexturePoolPtr texturePool, std::vector<ReadOnlyFilePtr> files) override;
+        coro::task<> makeBufferTask(coro::latch& latch, const ReadOnlyFilePtr& file, BufferPtr& buffer, uint32_t fileLength, uint32_t fileOffset) override;
     };
 
     class Device : public IDevice
@@ -413,7 +388,8 @@ namespace ler::rhi::d3d12
         D3D12MA::Allocator* m_allocator = nullptr;
         D3D12Context m_context;
         std::array<std::unique_ptr<Queue>, uint32_t(QueueType::Count)> m_queues;
-        std::shared_ptr<Storage> m_storage;
+        std::shared_ptr<coro::thread_pool> m_threadPool;
+        std::shared_ptr<IStorage> m_storage;
     };
 
     DevicePtr CreateDevice(const DeviceConfig& config);

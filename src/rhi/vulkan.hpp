@@ -294,51 +294,18 @@ namespace ler::rhi::vulkan
         sys::ReadOnlyFile handle;
     };
 
-    class Storage final : public IStorage
+    class Storage : public CommonStorage
     {
-    public:
-
-        ~Storage() override;
-        Storage(const VulkanContext& context, Device* device, std::shared_ptr<coro::thread_pool>& tp);
-        void update() override;
+      public:
+        Storage(Device* device, std::shared_ptr<coro::thread_pool>& tp);
         ReadOnlyFilePtr openFile(const fs::path& path) override;
-        std::vector<ReadOnlyFilePtr> openFiles(const fs::path& path, const fs::path& ext) override;
-
-        void requestLoadTexture(coro::latch& latch, TexturePoolPtr& texturePool, const std::span<ReadOnlyFilePtr>& files) override;
-        void requestLoadBuffer(coro::latch& latch, const ReadOnlyFilePtr& file, BufferPtr& buffer, uint32_t fileLength, uint32_t fileOffset) override;
-
-        //private:
-
-        img::ITexture* factoryTexture(const fs::path& filename, std::byte* metadata);
-        //BufferPtr getStaging(uint32_t wantedSize);
-        const BufferPtr& getStaging(int index) const { return m_stagings[index]; }
-        void putStaging(const BufferPtr& staging);
-        void releaseStaging(uint32_t index);
-        int acquireStaging();
-
-        static constexpr uint32_t kStagingSize = sys::C128Mio;
-        Device* m_device = nullptr;
-        const VulkanContext& m_context;
-        sys::ThreadPool m_threadPool;
-
-        using Allocator = std::pmr::polymorphic_allocator<>;
-        std::unique_ptr<std::byte[]> m_buffer = std::make_unique<std::byte[]>(sys::C04Mio);
-        std::pmr::monotonic_buffer_resource m_memory;
-
-        std::vector<BufferPtr> m_stagings = {};
-        mutable std::mutex m_staging_mutex = {};
-        sys::Bitset m_staging_bitset;
-        std::counting_semaphore<> m_semaphore;
-
-        using task_container = coro::task_container<coro::thread_pool>;
-        std::unique_ptr<task_container> m_scheduler;
-        sys::IoService m_ios;
 
       private:
+        sys::IoService m_ios;
 
-        coro::task<> makeSingleTextureTask(coro::latch& latch, TexturePoolPtr texturePool, ReadOnlyFilePtr file);
-        coro::task<> makeMultiTextureTask(coro::latch& latch, TexturePoolPtr texturePool, std::vector<ReadOnlyFilePtr> files);
-        coro::task<> makeBufferTask(coro::latch& latch, const ReadOnlyFilePtr& file, BufferPtr& buffer, uint32_t fileLength, uint32_t fileOffset);
+        coro::task<> makeSingleTextureTask(coro::latch& latch, TexturePoolPtr texturePool, ReadOnlyFilePtr file) override;
+        coro::task<> makeMultiTextureTask(coro::latch& latch, TexturePoolPtr texturePool, std::vector<ReadOnlyFilePtr> files) override;
+        coro::task<> makeBufferTask(coro::latch& latch, const ReadOnlyFilePtr& file, BufferPtr& buffer, uint32_t fileLength, uint32_t fileOffset) override;
     };
 
     class Device final : public IDevice
@@ -373,6 +340,7 @@ namespace ler::rhi::vulkan
         StoragePtr getStorage() override { return m_storage; }
 
         [[nodiscard]] GraphicsAPI getGraphicsAPI() const override { return GraphicsAPI::VULKAN; }
+        [[nodiscard]] const VulkanContext& getContext() const { return m_context; }
 
         static vk::Format convertFormat(Format format);
         static Format reverseFormat(vk::Format format);

@@ -68,9 +68,9 @@ class IoService
 
     void registerBuffers(std::vector<BufferInfo>& buffers, bool enabled);
 #ifdef _WIN32
-    void* getMemPtr(int id) const { return m_buffers[id].Address; }
+    std::byte* getMemPtr(int id) const { return static_cast<std::byte*>(m_buffers[id].Address); }
 #else
-    void* getMemPtr(int id) const { return m_buffers[id].iov_base; }
+    std::byte* getMemPtr(int id) const { return static_cast<std::byte*>(m_buffers[id].iov_base); }
 #endif
 
   private:
