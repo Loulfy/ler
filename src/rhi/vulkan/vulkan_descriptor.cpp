@@ -11,6 +11,7 @@ BindlessTable::BindlessTable(const VulkanContext& context, uint32_t count) : m_c
     std::vector<vk::DescriptorPoolSize> descriptorPoolSize;
     std::vector<vk::DescriptorSetLayoutBinding> bindings;
     descriptorPoolSize.emplace_back(vk::DescriptorType::eMutableEXT, count);
+    descriptorPoolSize.emplace_back(vk::DescriptorType::eSampler, count);
 
     auto descriptorPoolInfo = vk::DescriptorPoolCreateInfo();
     descriptorPoolInfo.setPoolSizes(descriptorPoolSize);

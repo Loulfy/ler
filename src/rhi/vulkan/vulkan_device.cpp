@@ -279,7 +279,7 @@ namespace ler::rhi::vulkan
         #ifdef _WIN32
             return _aligned_malloc(size, align);
         #else
-            return aligned_alloc(align, free);
+            return aligned_alloc(align, size);
         #endif
     }
 
