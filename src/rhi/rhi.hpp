@@ -174,6 +174,20 @@ namespace ler::rhi
 
     using SamplerPtr = std::shared_ptr<ISampler>;
 
+    using ResourcePtr = std::variant<TexturePtr,BufferPtr>;
+    class IBindlessTable
+    {
+      public:
+        virtual ~IBindlessTable() = default;
+        virtual uint32_t allocate() = 0;
+        virtual bool setResource(const ResourcePtr& res, uint32_t slot) = 0;
+        virtual void setSampler(const SamplerPtr& sampler, uint32_t slot) = 0;
+        [[nodiscard]] virtual TexturePtr getTexture(uint32_t slot) const = 0;
+        [[nodiscard]] virtual BufferPtr getBuffer(uint32_t slot) const = 0;
+    };
+
+    using BindlessTablePtr = std::shared_ptr<IBindlessTable>;
+
     using PipelineRenderingAttachment = std::vector<Format>;
 
     struct ShaderModule
@@ -230,6 +244,8 @@ namespace ler::rhi
         virtual ~ICommand() = default;
         virtual void reset() = 0;
         virtual void bindPipeline(const PipelinePtr& pipeline, uint32_t descriptorHandle) const = 0;
+        virtual void bindPipeline(const PipelinePtr& pipeline, const BindlessTablePtr& table) const = 0;
+        virtual void pushConstant(const PipelinePtr& pipeline, const void* data, uint8_t size) const = 0;
         virtual void drawIndexed(uint32_t vertexCount) const = 0;
         virtual void drawIndexedInstanced(uint32_t indexCount, uint32_t firstIndex, int32_t firstVertex, uint32_t firstId) const = 0;
         virtual void drawIndirectIndexed(const PipelinePtr& pipeline, const BufferPtr& commands, const BufferPtr& count, uint32_t maxDrawCount, uint32_t stride) const = 0;
@@ -328,7 +344,7 @@ namespace ler::rhi
         virtual void update() = 0;
         virtual ReadOnlyFilePtr openFile(const fs::path& path) = 0;
         virtual std::vector<ReadOnlyFilePtr> openFiles(const fs::path& path, const fs::path& ext) = 0;
-        virtual void requestLoadTexture(coro::latch& latch, TexturePoolPtr& texturePool, const std::span<ReadOnlyFilePtr>& files) = 0;
+        virtual void requestLoadTexture(coro::latch& latch, BindlessTablePtr& table, const std::span<ReadOnlyFilePtr>& files) = 0;
         virtual void requestLoadBuffer(coro::latch& latch, const ReadOnlyFilePtr& file, BufferPtr& buffer, uint32_t fileLength, uint32_t fileOffset) = 0;
     };
 
@@ -361,6 +377,7 @@ namespace ler::rhi
         // Pipeline
         void shaderAutoCompile();
         void compileShader(const ShaderModule& shaderModule, const fs::path& output);
+        [[nodiscard]] virtual BindlessTablePtr createBindlessTable(uint32_t count) = 0;
 
         [[nodiscard]] virtual PipelinePtr createGraphicsPipeline(const std::vector<ShaderModule>& shaderModules, const PipelineDesc& desc) = 0;
         [[nodiscard]] virtual PipelinePtr createComputePipeline(const ShaderModule& shaderModule) = 0;

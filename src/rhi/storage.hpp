@@ -20,7 +20,7 @@ class CommonStorage : public IStorage
     void update() override;
     std::vector<ReadOnlyFilePtr> openFiles(const fs::path& path, const fs::path& ext) override;
 
-    void requestLoadTexture(coro::latch& latch, TexturePoolPtr& texturePool, const std::span<ReadOnlyFilePtr>& files) override;
+    void requestLoadTexture(coro::latch& latch, BindlessTablePtr& table, const std::span<ReadOnlyFilePtr>& files) override;
     void requestLoadBuffer(coro::latch& latch, const ReadOnlyFilePtr& file, BufferPtr& buffer, uint32_t fileLength, uint32_t fileOffset) override;
 
     img::ITexture* factoryTexture(const ReadOnlyFilePtr& file, std::byte* metadata);
@@ -37,8 +37,8 @@ class CommonStorage : public IStorage
     std::vector<BufferPtr> m_stagings;
 
   private:
-    virtual coro::task<> makeSingleTextureTask(coro::latch& latch, TexturePoolPtr texturePool, ReadOnlyFilePtr file) = 0;
-    virtual coro::task<> makeMultiTextureTask(coro::latch& latch, TexturePoolPtr texturePool, std::vector<ReadOnlyFilePtr> files) = 0;
+    virtual coro::task<> makeSingleTextureTask(coro::latch& latch, BindlessTablePtr table, ReadOnlyFilePtr file) = 0;
+    virtual coro::task<> makeMultiTextureTask(coro::latch& latch, BindlessTablePtr table, std::vector<ReadOnlyFilePtr> files) = 0;
     virtual coro::task<> makeBufferTask(coro::latch& latch, const ReadOnlyFilePtr& file, BufferPtr& buffer, uint32_t fileLength, uint32_t fileOffset) = 0;
 
     using task_container = coro::task_container<coro::thread_pool>;

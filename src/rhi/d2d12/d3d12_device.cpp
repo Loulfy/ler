@@ -131,7 +131,7 @@ namespace ler::rhi::d3d12
 
         m_threadPool = std::make_shared<coro::thread_pool>(coro::thread_pool::options{ .thread_count = 8 });
 
-        m_storage = std::make_shared<StorageTest>(this, m_threadPool);
+        m_storage = std::make_shared<Storage>(this, m_threadPool);
     }
 
     void Buffer::uploadFromMemory(const void* src, uint32_t byteSize) const

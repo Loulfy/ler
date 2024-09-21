@@ -40,7 +40,7 @@ static void queueTexture(const ReadOnlyFilePtr& file, sys::IoService::FileLoadRe
     req.buffOffset = 0;
 }
 
-coro::task<> Storage::makeSingleTextureTask(coro::latch& latch, TexturePoolPtr texturePool, ReadOnlyFilePtr file)
+coro::task<> Storage::makeSingleTextureTask(coro::latch& latch, BindlessTablePtr table, ReadOnlyFilePtr file)
 {
     TexturePtr texture;
     sys::IoService::FileLoadRequest request;
@@ -56,8 +56,8 @@ coro::task<> Storage::makeSingleTextureTask(coro::latch& latch, TexturePoolPtr t
     uint32_t head = tex->headOffset();
     desc.debugName = file->getFilename();
     texture = m_device->createTexture(desc);
-    uint32_t texId = texturePool->allocate();
-    texturePool->setTexture(texture, texId);
+    uint32_t texId = table->allocate();
+    table->setResource(texture, texId);
 
     request.fileLength = tex->getDataSize();
     request.fileOffset = head;
@@ -89,7 +89,7 @@ coro::task<> Storage::makeSingleTextureTask(coro::latch& latch, TexturePoolPtr t
     co_return;
 }
 
-coro::task<> Storage::makeMultiTextureTask(coro::latch& latch, TexturePoolPtr texturePool,
+coro::task<> Storage::makeMultiTextureTask(coro::latch& latch, BindlessTablePtr table,
                                            std::vector<ReadOnlyFilePtr> files)
 {
     std::vector<uint32_t> stagings;
@@ -136,10 +136,10 @@ coro::task<> Storage::makeMultiTextureTask(coro::latch& latch, TexturePoolPtr te
         TextureDesc desc = tex->desc();
         desc.debugName = file->getFilename();
 
-        log::info("Load texture: {}", desc.debugName);
+        uint32_t texIndex = table->allocate();
+        log::info("Load texture {:03}: {}", texIndex, desc.debugName);
         TexturePtr texture = m_device->createTexture(desc);
-        uint32_t texIndex = texturePool->allocate();
-        texturePool->setTexture(texture, texIndex);
+        table->setResource(texture, texIndex);
 
         for (const size_t mip : std::views::iota(0u, levels.size()))
         {

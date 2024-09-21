@@ -14,7 +14,7 @@ class TestLoadOneTex final : public rhi::IRenderPass
     rhi::PipelinePtr pipeline;
     rhi::TexturePtr texture;
     rhi::SamplerPtr sampler;
-    rhi::TexturePoolPtr texturePool;
+    rhi::BindlessTablePtr table;
     rhi::Latch latch;
 
     [[nodiscard]] bool startup() const override
@@ -25,10 +25,11 @@ class TestLoadOneTex final : public rhi::IRenderPass
     void create(const rhi::DevicePtr& device, const rhi::SwapChainPtr& swapChain) override
     {
         std::vector<rhi::ShaderModule> modules;
-        modules.emplace_back("cached/quad.frag", "PSMain", rhi::ShaderType::Pixel);
+        modules.emplace_back("cached/pouet.frag", "PSMain", rhi::ShaderType::Pixel);
         modules.emplace_back("cached/quad.vert", "VSMain", rhi::ShaderType::Vertex);
         rhi::PipelineDesc pso;
         pso.writeDepth = false;
+        pso.textureCount = 0;
         pso.topology = rhi::PrimitiveType::TriangleStrip;
         pso.colorAttach.emplace_back(swapChain->format());
         pipeline = device->createGraphicsPipeline(modules, pso);
@@ -36,34 +37,26 @@ class TestLoadOneTex final : public rhi::IRenderPass
         sampler = device->createSampler({ false });
         rhi::StoragePtr storage = device->getStorage();
 
-        texturePool = std::make_shared<rhi::TexturePool>();
+        table = device->createBindlessTable(16);
+        table->setSampler(sampler, 0);
 
-        //latch.reset(1);
         latch = std::make_shared<coro::latch>(1);
         //rhi::ReadOnlyFilePtr file = storage->openFile(sys::ASSETS_DIR / "grid01.KTX2");
         //rhi::ReadOnlyFilePtr file = storage->openFile(sys::ASSETS_DIR / "Wood_BaseColor.dds");
         //rhi::ReadOnlyFilePtr file = storage->openFile(sys::ASSETS_DIR / "sponza" / "332936164838540657.DDS");
         //rhi::ReadOnlyFilePtr file = storage->openFile(sys::ASSETS_DIR / "Textures" / "Pavement_Cobble_Leaves_BLENDSHADER_Normal.dds");
         //auto files = storage->openFiles(sys::ASSETS_DIR, ".dds");
-        auto files = storage->openFiles(sys::ASSETS_DIR / "Textures", ".dds");
-        //texture = async::sync_wait(storage->asyncLoadTexture(file));
-        //storage->requestLoadTexture(*latch, texturePool, files);
-        storage->requestLoadTexture(*latch, texturePool, std::span(files.data(), 256));
-        //storage->requestLoadTexture(*latch, texturePool, std::span(&file, 1));
+        auto files = storage->openFiles(R"(C:\Users\pouet\Documents\gdev\assets\Textures)", ".dds");
+        storage->requestLoadTexture(*latch, table, std::span(files.data(), 16));
         //async::sync_wait(*latch);
-
-        //texture = texturePool->getTexture(0);
-
-        pipeline->createDescriptorSet(0);
-        //pipeline->updateSampler(0, 0, sampler, texture);
     }
 
     void render(rhi::TexturePtr& backBuffer, rhi::CommandPtr& command) override
     {
-        texture = texturePool->getTexture(8);
-        pipeline->updateSampler(0, 0, sampler, texture);
+        uint32_t tex = 12;
 
-        command->bindPipeline(pipeline, 0);
+        command->bindPipeline(pipeline, table);
+        command->pushConstant(pipeline, &tex, sizeof(uint32_t));
 
         rhi::RenderingInfo pass;
         pass.viewport = backBuffer->extent();
@@ -80,7 +73,7 @@ class TestLoadMultiTex final : public rhi::IRenderPass
 {
   public:
     rhi::PipelinePtr pipeline;
-    rhi::TexturePoolPtr texturePool;
+    rhi::BindlessTablePtr table;
     rhi::SamplerPtr sampler;
     rhi::Latch latch;
 
@@ -92,7 +85,7 @@ class TestLoadMultiTex final : public rhi::IRenderPass
         rhi::PipelineDesc pso;
         pso.writeDepth = false;
         pso.topology = rhi::PrimitiveType::TriangleStrip;
-        pso.colorAttach.emplace_back(rhi::Format::RGBA8_UNORM);
+        pso.colorAttach.emplace_back(swapChain->format());
         pipeline = device->createGraphicsPipeline(modules, pso);
 
         sampler = device->createSampler({ false });
@@ -100,11 +93,11 @@ class TestLoadMultiTex final : public rhi::IRenderPass
 
         latch = std::make_shared<coro::latch>(1);
 
-        texturePool = std::make_shared<rhi::TexturePool>();
+        table = device->createBindlessTable(16);
         std::vector<rhi::ReadOnlyFilePtr> files = storage->openFiles(sys::ASSETS_DIR / "sponza", ".DDS");
-        storage->requestLoadTexture(*latch, texturePool, files);
+        storage->requestLoadTexture(*latch, table, files);
 
-        rhi::TexturePtr texture = texturePool->getTexture(1);
+        rhi::TexturePtr texture = table->getTexture(1);
 
         pipeline->createDescriptorSet(0);
         pipeline->updateSampler(0, 1, sampler, texture);
@@ -131,33 +124,8 @@ int main()
     // ler::scene::SceneImporter::preparator(R"(C:\Users\loria\Documents\EnhancedLER\assets\sponza.glb)");
     // ler::scene::SceneImporter::preparator(R"(C:\Users\loria\Documents\minimalRT\assets\sponza\Sponza.gltf)");
 
-    /*coro::thread_pool tp{ coro::thread_pool::options{ .thread_count = 8 } };
-    sys::IoService service(tp);
-
-    std::array<char, 64> buffer = {};
-    buffer.fill('#');
-
-    sys::ReadOnlyFilePtr file = std::make_shared<sys::ReadOnlyFile>("test.txt");
-
-    auto make_read_task = [&]() -> coro::task<void> {
-        co_await tp.schedule();
-        sys::IoService::FileLoadRequest read;
-        read.file = file.get();
-        read.fileLength = 5;
-        read.fileOffset = 4;
-        read.buffAddress = buffer.data();
-        co_await service.submit(read);
-        co_return;
-    };
-
-    coro::sync_wait(make_read_task());
-
-    for (auto& b : buffer)
-        std::cout << b;
-    std::cout << std::endl;*/
-
     app::AppConfig cfg;
-    cfg.debug = false;
+    cfg.debug = true;
     cfg.width = 1080;
     cfg.height = 720;
     cfg.api = rhi::GraphicsAPI::VULKAN;

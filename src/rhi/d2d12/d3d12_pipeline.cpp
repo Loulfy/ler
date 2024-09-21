@@ -79,7 +79,7 @@ namespace ler::rhi::d3d12
         }
     }
 
-    static D3D12_PRIMITIVE_TOPOLOGY_TYPE convertTopology(PrimitiveType primitive)
+    static D3D12_PRIMITIVE_TOPOLOGY_TYPE convertPrimitive(PrimitiveType primitive)
     {
         switch(primitive)
         {
@@ -97,6 +97,29 @@ namespace ler::rhi::d3d12
                 return D3D12_PRIMITIVE_TOPOLOGY_TYPE_UNDEFINED;
             case PrimitiveType::PatchList:
                 return D3D12_PRIMITIVE_TOPOLOGY_TYPE_PATCH;
+        }
+    }
+
+    static D3D_PRIMITIVE_TOPOLOGY convertTopology(PrimitiveType primitive)
+    {
+        switch(primitive)
+        {
+            case PrimitiveType::PointList:
+                return D3D_PRIMITIVE_TOPOLOGY_POINTLIST;
+            case PrimitiveType::LineList:
+                return D3D_PRIMITIVE_TOPOLOGY_LINELIST;
+            default:
+            case PrimitiveType::TriangleFan:
+            case PrimitiveType::TriangleList:
+                return D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST;
+            case PrimitiveType::TriangleStrip:
+                return D3D_PRIMITIVE_TOPOLOGY_TRIANGLESTRIP;
+            case PrimitiveType::TriangleListWithAdjacency:
+                return D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST_ADJ;
+            case PrimitiveType::TriangleStripWithAdjacency:
+                return D3D_PRIMITIVE_TOPOLOGY_TRIANGLESTRIP_ADJ;
+            case PrimitiveType::PatchList:
+                return D3D_PRIMITIVE_TOPOLOGY_1_CONTROL_POINT_PATCHLIST;
         }
     }
 
@@ -153,6 +176,10 @@ namespace ler::rhi::d3d12
 
         log::debug("======================================================");
         log::debug("Reflect Shader: {}, Stage: {}", path.stem().string(), to_string(shaderModule.stage));
+
+        UINT64 requiresFlags = shaderReflection->GetRequiresFlags();
+        if(requiresFlags & D3D_SHADER_REQUIRES_RESOURCE_DESCRIPTOR_HEAP_INDEXING)
+            shader->descriptorHeapIndexing = true;
 
         if (shaderModule.stage == ShaderType::Vertex)
         {
@@ -241,13 +268,27 @@ namespace ler::rhi::d3d12
     void Pipeline::initRootSignature()
     {
         std::vector<CD3DX12_ROOT_PARAMETER1> rootParameters;
-        for(DescriptorRanges& ranges : m_ranges)
+        if(m_descriptorHeapIndexing)
         {
-            if(!ranges.empty())
+            CD3DX12_ROOT_PARAMETER1& rootParam = rootParameters.emplace_back();
+            for(auto& [set, binding] : bindingMap)
             {
-                std::sort(ranges.begin(), ranges.end(), compareDescriptorRange);
-                auto& rootParam = rootParameters.emplace_back();
-                rootParam.InitAsDescriptorTable(ranges.size(), ranges.data());
+                if(binding.type == D3D12_DESCRIPTOR_RANGE_TYPE_CBV)
+                {
+                    rootParam.InitAsConstants(1, binding.bindPoint);
+                }
+            }
+        }
+        else
+        {
+            for(DescriptorRanges& ranges : m_ranges)
+            {
+                if(!ranges.empty())
+                {
+                    std::sort(ranges.begin(), ranges.end(), compareDescriptorRange);
+                    auto& rootParam = rootParameters.emplace_back();
+                    rootParam.InitAsDescriptorTable(ranges.size(), ranges.data());
+                }
             }
         }
 
@@ -260,6 +301,7 @@ namespace ler::rhi::d3d12
 
         CD3DX12_VERSIONED_ROOT_SIGNATURE_DESC rootSignatureDesc;
         D3D12_ROOT_SIGNATURE_FLAGS Flags = D3D12_ROOT_SIGNATURE_FLAG_CBV_SRV_UAV_HEAP_DIRECTLY_INDEXED | D3D12_ROOT_SIGNATURE_FLAG_ALLOW_INPUT_ASSEMBLER_INPUT_LAYOUT;
+        Flags |= D3D12_ROOT_SIGNATURE_FLAG_SAMPLER_HEAP_DIRECTLY_INDEXED;
         rootSignatureDesc.Init_1_1(rootParameters.size(), rootParameters.data(), 0, nullptr, Flags);
 
         ComPtr<ID3DBlob> signature;
@@ -297,9 +339,12 @@ namespace ler::rhi::d3d12
             pipeline->merge(0, shader->rangesCbvSrvUav);
             pipeline->merge(1, shader->rangesSampler);
             pipeline->bindingMap.merge(shader->bindingMap);
+            if(shader->descriptorHeapIndexing)
+                pipeline->m_descriptorHeapIndexing = true;
         }
 
         pipeline->initRootSignature();
+        pipeline->topology = convertTopology(desc.topology);
 
         // Describe and create the graphics pipeline state objects (PSO).
         D3D12_GRAPHICS_PIPELINE_STATE_DESC psoDesc = {};
@@ -331,7 +376,7 @@ namespace ler::rhi::d3d12
         psoDesc.DepthStencilState.StencilEnable = false;
         psoDesc.DepthStencilState.DepthWriteMask = D3D12_DEPTH_WRITE_MASK_ALL;
         psoDesc.SampleMask = UINT_MAX;
-        psoDesc.PrimitiveTopologyType = convertTopology(desc.topology);
+        psoDesc.PrimitiveTopologyType = convertPrimitive(desc.topology);
         psoDesc.NumRenderTargets = desc.colorAttach.size();
         for(size_t i = 0; i < desc.colorAttach.size(); ++i)
             psoDesc.RTVFormats[i] = convertFormatRtv(desc.colorAttach[i]);
@@ -394,11 +439,11 @@ namespace ler::rhi::d3d12
         srvDesc.Texture2D.MipLevels = image->desc.MipLevels;
 
         DescriptorSet& descriptorSet = m_descriptors[descriptor];
-        assert(!descriptorSet.tables[0].isNull());
+        //assert(!descriptorSet.tables[0].isNull());
         assert(!descriptorSet.tables[1].isNull());
         //assert(binding < descriptorSet.bindings.size());
         //uint32_t index = descriptorSet.bindings[binding];
-        m_context.device->CreateShaderResourceView(image->handle, &srvDesc, descriptorSet.tables[0].getCpuHandle(binding));
+        //m_context.device->CreateShaderResourceView(image->handle, &srvDesc, descriptorSet.tables[0].getCpuHandle(binding));
         m_context.device->CreateSampler(&native->desc, descriptorSet.tables[1].getCpuHandle());
     }
 

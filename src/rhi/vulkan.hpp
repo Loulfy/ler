@@ -7,6 +7,7 @@
 #include "rhi.hpp"
 #include "queue.hpp"
 #include "storage.hpp"
+#include "bindless.hpp"
 #include "sys/thread.hpp"
 #include "sys/ioring.hpp"
 
@@ -56,6 +57,7 @@ namespace ler::rhi::vulkan
         uint32_t transferQueueFamily = UINT32_MAX;
         VmaAllocator allocator = nullptr;
         vk::PipelineCache pipelineCache;
+        vk::DescriptorSetLayout bindlessLayout;
         uint32_t hostPointerAlignment = 4096u;
         bool hostBuffer = true;
         bool debug = false;
@@ -132,6 +134,36 @@ namespace ler::rhi::vulkan
 
     using ShaderPtr = std::shared_ptr<Shader>;
 
+    class BindlessTable : public CommonBindlessTable
+    {
+      public:
+        BindlessTable(const VulkanContext& context, uint32_t count);
+        void setSampler(const SamplerPtr& sampler, uint32_t slot) override;
+
+        static vk::UniqueDescriptorSetLayout buildBindlessLayout(const VulkanContext& context, uint32_t count, bool useMutable);
+        vk::DescriptorSet m_descriptor;
+
+      private:
+        const VulkanContext& m_context;
+        vk::UniqueDescriptorPool m_pool;
+        vk::UniqueDescriptorSetLayout m_layout;
+
+        static constexpr std::initializer_list<vk::DescriptorType> kStandard = {
+            vk::DescriptorType::eSampledImage,
+            vk::DescriptorType::eSampler,
+            vk::DescriptorType::eUniformBuffer,
+            vk::DescriptorType::eStorageBuffer,
+        };
+
+        static constexpr std::initializer_list<vk::DescriptorType> kMutable = {
+            vk::DescriptorType::eMutableEXT,
+            vk::DescriptorType::eSampler
+        };
+
+        bool visitTexture(const TexturePtr& texture, uint32_t slot) override;
+        bool visitBuffer(const BufferPtr& buffer, uint32_t slot) override;
+    };
+
     struct DescriptorAllocator
     {
         std::vector<vk::DescriptorSetLayoutBinding> layoutBinding;
@@ -197,6 +229,8 @@ namespace ler::rhi::vulkan
 
         void reset() override;
         void bindPipeline(const rhi::PipelinePtr& pipeline, uint32_t descriptorHandle) const override;
+        void bindPipeline(const rhi::PipelinePtr& pipeline, const BindlessTablePtr& table) const override;
+        void pushConstant(const rhi::PipelinePtr& pipeline, const void* data, uint8_t size) const override;
         void drawIndexed(uint32_t vertexCount) const override;
         void drawIndexedInstanced(uint32_t indexCount, uint32_t firstIndex, int32_t firstVertex, uint32_t firstId) const override;
         void drawIndirectIndexed(const rhi::PipelinePtr& pipeline, const BufferPtr& commands, const BufferPtr& count, uint32_t maxDrawCount, uint32_t stride) const override;
@@ -303,8 +337,8 @@ namespace ler::rhi::vulkan
       private:
         sys::IoService m_ios;
 
-        coro::task<> makeSingleTextureTask(coro::latch& latch, TexturePoolPtr texturePool, ReadOnlyFilePtr file) override;
-        coro::task<> makeMultiTextureTask(coro::latch& latch, TexturePoolPtr texturePool, std::vector<ReadOnlyFilePtr> files) override;
+        coro::task<> makeSingleTextureTask(coro::latch& latch, BindlessTablePtr table, ReadOnlyFilePtr file) override;
+        coro::task<> makeMultiTextureTask(coro::latch& latch, BindlessTablePtr table, std::vector<ReadOnlyFilePtr> files) override;
         coro::task<> makeBufferTask(coro::latch& latch, const ReadOnlyFilePtr& file, BufferPtr& buffer, uint32_t fileLength, uint32_t fileOffset) override;
     };
 
@@ -326,6 +360,7 @@ namespace ler::rhi::vulkan
         SwapChainPtr createSwapChain(GLFWwindow* window) override;
 
         // Pipeline
+        [[nodiscard]] BindlessTablePtr createBindlessTable(uint32_t size) override;
         [[nodiscard]] ShaderPtr createShader(const ShaderModule& shaderModule) const;
         [[nodiscard]] rhi::PipelinePtr createGraphicsPipeline(const std::vector<ShaderModule>& shaderModules, const PipelineDesc& desc) override;
         [[nodiscard]] rhi::PipelinePtr createComputePipeline(const ShaderModule& shaderModule) override;
@@ -361,6 +396,7 @@ namespace ler::rhi::vulkan
         uint32_t m_transferQueueFamily = UINT32_MAX;
         vk::UniqueDevice m_device;
         vk::UniquePipelineCache m_pipelineCache;
+        vk::UniqueDescriptorSetLayout m_bindlessLayout;
         std::shared_ptr<coro::thread_pool> m_threadPool;
         VulkanContext m_context;
         std::array<std::unique_ptr<Queue>, uint32_t(QueueType::Count)> m_queues;

@@ -32,15 +32,18 @@ PSInput VSMain(uint vid : SV_VertexID)
     return result;
 }
 
-Texture2D<float4> g_texture: register(t1);
+//Texture2D<float4> g_texture: register(t1);
 //Texture2D<float4> p_texture: register(t2);
-SamplerState g_sampler: register(s0);
-ConstantBuffer<SkyBoxRenderResources> renderResource : register(b0);
+//SamplerState g_sampler: register(s0);
+
+//ConstantBuffer<SkyBoxRenderResources> renderResource : register(b0);
+uint textureIndex;
 
 float4 PSMain(PSInput input) : SV_TARGET
 {
     //return float4(1,0,0,1);
-    //Texture2D<float4> g_texture = ResourceDescriptorHeap[0];
+    SamplerState g_sampler = SamplerDescriptorHeap[0];
+    Texture2D<float4> g_texture = ResourceDescriptorHeap[textureIndex];
     //float4 v = p_texture.Sample(g_sampler, input.uv);
     //float4 r = g_texture.Sample(g_sampler, input.uv);
     //return float4(v.x, v.y, v.z, r.w);

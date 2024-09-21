@@ -60,15 +60,15 @@ img::ITexture* CommonStorage::factoryTexture(const ReadOnlyFilePtr& file, std::b
     return nullptr;
 }
 
-void CommonStorage::requestLoadTexture(coro::latch& latch, TexturePoolPtr& texturePool,
+void CommonStorage::requestLoadTexture(coro::latch& latch, BindlessTablePtr& table,
                                        const std::span<ReadOnlyFilePtr>& files)
 {
     if (files.size() == 1)
-        m_scheduler.start(makeSingleTextureTask(latch, texturePool, files.front()));
+        m_scheduler.start(makeSingleTextureTask(latch, table, files.front()));
     else
     {
         std::vector fileList(files.begin(), files.end());
-        m_scheduler.start(makeMultiTextureTask(latch, texturePool, std::move(fileList)));
+        m_scheduler.start(makeMultiTextureTask(latch, table, std::move(fileList)));
     }
 }
 

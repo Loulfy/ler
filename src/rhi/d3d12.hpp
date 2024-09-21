@@ -7,6 +7,7 @@
 #include "rhi.hpp"
 #include "queue.hpp"
 #include "storage.hpp"
+#include "bindless.hpp"
 #include "sys/mem.hpp"
 
 #include <d3d12.h>
@@ -177,9 +178,27 @@ namespace ler::rhi::d3d12
         std::vector<std::string> inputElementSemanticNames;
         std::vector<D3D12_INPUT_ELEMENT_DESC> inputElementDescs;
         std::multimap<uint32_t, ShaderBindDesc> bindingMap;
+        bool descriptorHeapIndexing = false;
     };
 
     using ShaderPtr = std::shared_ptr<Shader>;
+
+    class BindlessTable : public CommonBindlessTable
+    {
+      public:
+        BindlessTable(const D3D12Context& context, uint32_t count);
+        void setSampler(const SamplerPtr& sampler, uint32_t slot) override;
+        std::array<ID3D12DescriptorHeap*,2> heaps() const { return {m_heapRes.Get(), m_heapSamp.Get()}; }
+
+      private:
+        const D3D12Context& m_context;
+        uint32_t m_descriptorSize = 0;
+        ComPtr<ID3D12DescriptorHeap> m_heapRes;
+        ComPtr<ID3D12DescriptorHeap> m_heapSamp;
+
+        bool visitTexture(const TexturePtr& texture, uint32_t slot) override;
+        bool visitBuffer(const BufferPtr& buffer, uint32_t slot) override;
+    };
 
     struct DescriptorSet
     {
@@ -199,6 +218,7 @@ namespace ler::rhi::d3d12
         ComPtr<ID3D12CommandSignature> commandSignature;
         ComPtr<ID3D12PipelineState> pipelineState;
         std::multimap<uint32_t, ShaderBindDesc> bindingMap;
+        D3D_PRIMITIVE_TOPOLOGY topology = {};
 
         void merge(int type, DescriptorRanges& ranges);
         void initRootSignature();
@@ -216,6 +236,7 @@ namespace ler::rhi::d3d12
         // only shader visible heap descriptor (CBV_UAV_SRV & SAMPLER)
         std::array<DescriptorRanges, 2> m_ranges;
         std::vector<DescriptorSet> m_descriptors;
+        bool m_descriptorHeapIndexing = false;
 
         const D3D12Context& m_context;
         bool m_graphics = true;
@@ -230,6 +251,8 @@ namespace ler::rhi::d3d12
 
         void reset() override;
         void bindPipeline(const PipelinePtr& pipeline, uint32_t descriptorHandle) const override;
+        void bindPipeline(const PipelinePtr& pipeline, const BindlessTablePtr& table) const override;
+        void pushConstant(const PipelinePtr& pipeline, const void* data, uint8_t size) const override;
         void drawIndexed(uint32_t vertexCount) const override;
         void drawIndexedInstanced(uint32_t indexCount, uint32_t firstIndex, int32_t firstVertex, uint32_t firstId) const override;
         void drawIndirectIndexed(const rhi::PipelinePtr& pipeline, const BufferPtr& commands, const BufferPtr& count, uint32_t maxDrawCount, uint32_t stride) const override;
@@ -326,12 +349,12 @@ namespace ler::rhi::d3d12
 
       private:
         const D3D12Context& m_context;
-        ComPtr<IDStorageQueue> queue;
-        std::vector<std::pair<ID3D12Resource*,std::byte*>> buffers;
+        ComPtr<IDStorageQueue> m_queue;
+        std::vector<std::byte*> m_buffers;
 
         void submitWait();
-        coro::task<> makeSingleTextureTask(coro::latch& latch, TexturePoolPtr texturePool, ReadOnlyFilePtr file) override;
-        coro::task<> makeMultiTextureTask(coro::latch& latch, TexturePoolPtr texturePool, std::vector<ReadOnlyFilePtr> files) override;
+        coro::task<> makeSingleTextureTask(coro::latch& latch, BindlessTablePtr table, ReadOnlyFilePtr file) override;
+        coro::task<> makeMultiTextureTask(coro::latch& latch, BindlessTablePtr table, std::vector<ReadOnlyFilePtr> files) override;
         coro::task<> makeBufferTask(coro::latch& latch, const ReadOnlyFilePtr& file, BufferPtr& buffer, uint32_t fileLength, uint32_t fileOffset) override;
     };
 
@@ -353,6 +376,7 @@ namespace ler::rhi::d3d12
         SwapChainPtr createSwapChain(GLFWwindow* window) override;
 
         // Pipeline
+        [[nodiscard]] BindlessTablePtr createBindlessTable(uint32_t count) override;
         [[nodiscard]] ShaderPtr createShader(const ShaderModule& shaderModule) const;
         [[nodiscard]] rhi::PipelinePtr createGraphicsPipeline(const std::vector<ShaderModule>& shaderModules, const PipelineDesc& desc) override;
         [[nodiscard]] rhi::PipelinePtr createComputePipeline(const ShaderModule& shaderModule) override;

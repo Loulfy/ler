@@ -168,6 +168,9 @@ namespace ler::rhi::vulkan
             deviceInfo.setPEnabledLayerNames(layers);
         deviceInfo.setPEnabledFeatures(&features);
 
+        vk::PhysicalDeviceMutableDescriptorTypeFeaturesEXT mutableFeature;
+        mutableFeature.setMutableDescriptorType(true);
+
         vk::PhysicalDeviceVulkan11Features vulkan11Features;
         vulkan11Features.setShaderDrawParameters(true);
 
@@ -201,12 +204,14 @@ namespace ler::rhi::vulkan
                 //vk::PhysicalDeviceRayQueryFeaturesKHR,
                 /*vk::PhysicalDeviceRayTracingPipelineFeaturesKHR,*/
                 //vk::PhysicalDeviceAccelerationStructureFeaturesKHR,
+                vk::PhysicalDeviceMutableDescriptorTypeFeaturesEXT,
                 vk::PhysicalDeviceVulkan11Features,
                 vk::PhysicalDeviceVulkan12Features,
                 vk::PhysicalDeviceVulkan13Features> createInfoChain(
                 deviceInfo,
                 //{supportRayTracing},
                 //{supportRayTracing},
+                mutableFeature,
                 vulkan11Features,
                 vulkan12Features,
                 vulkan13Features);
@@ -237,6 +242,9 @@ namespace ler::rhi::vulkan
         m_context.pipelineCache = m_pipelineCache.get();
         m_context.allocator = allocator;
         m_context.debug = config.debug;
+
+        m_bindlessLayout = BindlessTable::buildBindlessLayout(m_context, 16, true);
+        m_context.bindlessLayout = m_bindlessLayout.get();
 
         m_context.hostBuffer = config.hostBuffer;
         m_context.hostPointerAlignment = memoryProps.minImportedHostPointerAlignment;

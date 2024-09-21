@@ -472,6 +472,22 @@ namespace ler::rhi::vulkan
         cmdBuf.bindDescriptorSets(native->bindPoint, native->pipelineLayout.get(), 0, native->getDescriptorSet(descriptorHandle), nullptr);
     }
 
+    void Command::bindPipeline(const rhi::PipelinePtr& pipeline, const BindlessTablePtr& table) const
+    {
+        auto* native = checked_cast<BasePipeline*>(pipeline.get());
+        cmdBuf.bindPipeline(native->bindPoint, native->handle.get());
+
+        auto* bindless = checked_cast<BindlessTable*>(table.get());
+        cmdBuf.bindDescriptorSets(native->bindPoint, native->pipelineLayout.get(), 0, bindless->m_descriptor, nullptr);
+    }
+
+    void Command::pushConstant(const rhi::PipelinePtr& pipeline, const void* data, uint8_t size) const
+    {
+        assert(size < 128);
+        auto* native = checked_cast<BasePipeline*>(pipeline.get());
+        cmdBuf.pushConstants(native->pipelineLayout.get(), vk::ShaderStageFlagBits::eFragment, 0, size, data);
+    }
+
     void Command::beginRendering(const RenderingInfo& renderingInfo) const
     {
         vk::RenderingInfo renderInfo;

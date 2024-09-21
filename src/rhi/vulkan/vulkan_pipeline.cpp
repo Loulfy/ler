@@ -141,6 +141,7 @@ namespace ler::rhi::vulkan
 
         for (auto& set: sets)
         {
+            int useMutable = 0;
             DescriptorSetLayoutData desc;
             desc.set_number = set->set;
             desc.bindings.resize(set->binding_count);
@@ -153,10 +154,10 @@ namespace ler::rhi::vulkan
                 binding.stageFlags = shader->stageFlagBits;
                 log::debug("set = {}, binding = {}, count = {:02}, type = {}", set->set, binding.binding,
                            binding.descriptorCount, vk::to_string(binding.descriptorType));
-
-                if(binding.descriptorType == vk::DescriptorType::eCombinedImageSampler)
-                    binding.descriptorCount = 32;
+                if(binding.binding == 0 && binding.descriptorCount == 0)
+                    ++useMutable;
             }
+            log::debug("set = {}, mutable = {}", set->set, useMutable > 1);
             shader->descriptorMap.insert({set->set, desc});
         }
 
@@ -215,11 +216,19 @@ namespace ler::rhi::vulkan
                                                e->second.bindings.end());
             descriptorLayoutInfo.setBindings(allocator.layoutBinding);
 
-            vk::MutableDescriptorTypeCreateInfoEXT mutable_info;
-            std::initializer_list<vk::DescriptorType> types = {vk::DescriptorType::eSampledImage, vk::DescriptorType::eStorageBuffer, vk::DescriptorType::eStorageBuffer};
+            std::initializer_list<vk::DescriptorType> types = {vk::DescriptorType::eSampledImage, vk::DescriptorType::eStorageImage, vk::DescriptorType::eStorageBuffer};
             vk::MutableDescriptorTypeListEXT list;
             list.setDescriptorTypes(types);
-            mutable_info.setMutableDescriptorTypeLists(list);
+            std::vector<vk::MutableDescriptorTypeListEXT> mutable_list;
+            for(const auto& b : allocator.layoutBinding)
+            {
+                if(b.descriptorType == vk::DescriptorType::eMutableEXT)
+                    mutable_list.emplace_back(list);
+                else
+                    mutable_list.emplace_back();
+            }
+            vk::MutableDescriptorTypeCreateInfoEXT mutable_info;
+            mutable_info.setMutableDescriptorTypeLists(mutable_list);
 
             vk::DescriptorSetLayoutBindingFlagsCreateInfo extended_info;
             vk::DescriptorBindingFlags bindless_flags = vk::DescriptorBindingFlagBits::ePartiallyBound | vk::DescriptorBindingFlagBits::eUpdateAfterBind;
@@ -246,6 +255,7 @@ namespace ler::rhi::vulkan
             setLayouts.push_back(allocator.layout.get());
         }
 
+        setLayouts[0] = m_context.bindlessLayout;
         layoutInfo.setSetLayouts(setLayouts);
         pipelineLayout = device.createPipelineLayoutUnique(layoutInfo);
     }

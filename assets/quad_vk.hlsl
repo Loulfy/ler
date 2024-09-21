@@ -32,14 +32,21 @@
      return result;
  }
 
- [[vk::binding(0), vk::combinedImageSampler]] Texture2D<float4> g_texture: register(t0);
- [[vk::binding(0), vk::combinedImageSampler]] SamplerState g_sampler: register(s0);
+ //[[vk::binding(0), vk::combinedImageSampler]] Texture2D<float4> g_texture: register(t0);
+ //[[vk::binding(0), vk::combinedImageSampler]] SamplerState g_sampler: register(s0);
  //[[vk::binding(0)]] ConstantBuffer<SkyBoxRenderResources> renderResource : register(b0);
+ //[[vk::binding(0)]] Texture2D<float4> g_texture[]: register(t0);
+ //[[vk::binding(1)]] SamplerState g_sampler: register(s0);
+
+ //ConstantBuffer<SkyBoxRenderResources> renderResource : register(b3);
+
+ [[vk::push_constant]]
+ ConstantBuffer<SkyBoxRenderResources> renderResource;
 
  float4 PSMain(PSInput input) : SV_TARGET
  {
      //return float4(1,0,0,1);
-     return g_texture.Sample(g_sampler, input.uv/* * renderResource.textureIndex*/);
-     //Texture2D<float4> myTexture = ResourceDescriptorHeap[0];
-     //return myTexture.Sample(g_sampler, input.uv/* renderResource.textureIndex*/);
+     SamplerState g_sampler = SamplerDescriptorHeap[0];
+     Texture2D<float4> g_texture = ResourceDescriptorHeap[renderResource.textureIndex];
+     return g_texture.Sample(g_sampler, input.uv);
  }

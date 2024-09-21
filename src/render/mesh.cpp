@@ -98,7 +98,7 @@ void MeshBuffers::allocate(const rhi::DevicePtr& device, rhi::TexturePoolPtr tex
     command->copyBuffer(staging, m_skinBuffer, skinDesc.byteSize, 0);
     device->submitOneShot(command);
 
-    storage->requestLoadTexture(*m_latch, texturePool, m_files);
+    //storage->requestLoadTexture(*m_latch, texturePool, m_files);
 }
 
 static glm::vec3 toVec3(const scene::Vec3& vec)

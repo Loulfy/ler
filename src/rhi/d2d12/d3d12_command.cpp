@@ -308,7 +308,7 @@ void Command::bindPipeline(const PipelinePtr& pipeline, uint32_t descriptorHandl
     if (native->isGraphics())
     {
         m_commandList->SetGraphicsRootSignature(native->rootSignature.Get());
-        m_commandList->IASetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
+        m_commandList->IASetPrimitiveTopology(native->topology);
     }
     else
     {
@@ -326,6 +326,33 @@ void Command::bindPipeline(const PipelinePtr& pipeline, uint32_t descriptorHandl
                 m_commandList->SetComputeRootDescriptorTable(i, alloc.getGpuHandle());
         }
     }
+}
+
+void Command::bindPipeline(const PipelinePtr& pipeline, const BindlessTablePtr& table) const
+{
+    auto* native = checked_cast<Pipeline*>(pipeline.get());
+    m_commandList->SetPipelineState(native->pipelineState.Get());
+
+    auto* bindless = checked_cast<BindlessTable*>(table.get());
+    //DescriptorSet& descriptorSet = native->getDescriptorSet(0);
+
+    const std::array<ID3D12DescriptorHeap*,2> heaps = bindless->heaps();
+    m_commandList->SetDescriptorHeaps(heaps.size(), heaps.data());
+
+    if (native->isGraphics())
+    {
+        m_commandList->SetGraphicsRootSignature(native->rootSignature.Get());
+        m_commandList->IASetPrimitiveTopology(native->topology);
+    }
+    else
+    {
+        m_commandList->SetComputeRootSignature(native->rootSignature.Get());
+    }
+}
+
+void Command::pushConstant(const PipelinePtr& pipeline, const void* data, uint8_t size) const
+{
+    m_commandList->SetGraphicsRoot32BitConstants(0u, size/sizeof(uint32_t), data, 0u);
 }
 
 void Command::beginRendering(const rhi::PipelinePtr& pipeline, TexturePtr& backBuffer)

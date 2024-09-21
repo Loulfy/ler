@@ -14,7 +14,7 @@ Storage::Storage(Device* device, std::shared_ptr<coro::thread_pool>& tp)
     queueDesc.Device = m_context.device;
 
     m_context.storage->SetStagingBufferSize(256 * 1024 * 1024);
-    m_context.storage->CreateQueue(&queueDesc, IID_PPV_ARGS(&queue));
+    m_context.storage->CreateQueue(&queueDesc, IID_PPV_ARGS(&m_queue));
 
     for (const BufferPtr& staging : m_stagings)
     {
@@ -22,7 +22,7 @@ Storage::Storage(Device* device, std::shared_ptr<coro::thread_pool>& tp)
         void* pMappedData;
         buff->handle->Map(0, nullptr, &pMappedData);
         auto* data = static_cast<std::byte*>(pMappedData);
-        buffers.emplace_back(buff->handle, data);
+        m_buffers.emplace_back(data);
     }
 }
 
@@ -41,13 +41,13 @@ void Storage::submitWait()
     HANDLE event = CreateEvent(nullptr, FALSE, FALSE, nullptr);
     fence->SetEventOnCompletion(1, event);
 
-    queue->EnqueueSignal(fence.Get(), 1);
-    queue->Submit();
+    m_queue->EnqueueSignal(fence.Get(), 1);
+    m_queue->Submit();
     WaitForSingleObjectEx(event, INFINITE, FALSE);
     CloseHandle(event);
 
     DSTORAGE_ERROR_RECORD errorRecord = {};
-    queue->RetrieveErrorRecord(&errorRecord);
+    m_queue->RetrieveErrorRecord(&errorRecord);
     if (FAILED(errorRecord.FirstFailure.HResult))
     {
         // errorRecord.FailureCount - The number of failed requests in the queue since the last
@@ -65,42 +65,39 @@ static void queueTexture(const ReadOnlyFilePtr& file, DSTORAGE_REQUEST& req)
     std::ranges::transform(ext, ext.begin(), ::tolower);
 
     req.Options.SourceType = DSTORAGE_REQUEST_SOURCE_FILE;
-    req.Options.DestinationType = DSTORAGE_REQUEST_DESTINATION_BUFFER;
+    req.Options.DestinationType = DSTORAGE_REQUEST_DESTINATION_MEMORY;
     req.Options.CompressionFormat = DSTORAGE_COMPRESSION_FORMAT_NONE;
     req.Source.File.Source = checked_cast<ReadOnlyFile*>(file.get())->handle.Get();
     req.Source.File.Offset = 0;
-    req.Source.File.Size = img::KtxTexture::kBytesToRead;
-    req.Destination.Buffer.Offset = 0;
-    req.Destination.Buffer.Size = 0;
 
     if (ext == ".dds")
         req.Source.File.Size = img::DdsTexture::kBytesToRead;
     else if (ext == ".ktx" || ext == ".ktx2")
         req.Source.File.Size = img::KtxTexture::kBytesToRead;
+    req.Destination.Memory.Size = req.Source.File.Size;
 }
 
-coro::task<> Storage::makeSingleTextureTask(coro::latch& latch, TexturePoolPtr texturePool, ReadOnlyFilePtr file)
+coro::task<> Storage::makeSingleTextureTask(coro::latch& latch, BindlessTablePtr table, ReadOnlyFilePtr file)
 {
     TexturePtr texture;
     DSTORAGE_REQUEST request = {};
     queueTexture(file, request);
     int bufferIndex = acquireStaging();
-    request.Destination.Buffer.Resource = buffers[bufferIndex].first;
-    request.Destination.Buffer.Size = file->sizeBytes();
+    request.Destination.Memory.Buffer = m_buffers[bufferIndex];
+    request.Destination.Memory.Size = file->sizeBytes();
     request.Source.File.Size = file->sizeBytes();
-    queue->EnqueueRequest(&request);
+    m_queue->EnqueueRequest(&request);
 
     submitWait();
 
-    img::ITexture* tex = factoryTexture(file, buffers[bufferIndex].second);
+    img::ITexture* tex = factoryTexture(file, m_buffers[bufferIndex]);
 
     TextureDesc desc = tex->desc();
     std::span levels = tex->levels();
-    uint32_t head = tex->headOffset();
     desc.debugName = file->getFilename();
     texture = m_device->createTexture(desc);
-    uint32_t texId = texturePool->allocate();
-    texturePool->setTexture(texture, texId);
+    uint32_t texId = table->allocate();
+    table->setResource(texture, texId);
 
     CommandPtr cmd = m_device->createCommand(QueueType::Transfer);
     for (const size_t mip : std::views::iota(0u, levels.size()))
@@ -125,7 +122,7 @@ coro::task<> Storage::makeSingleTextureTask(coro::latch& latch, TexturePoolPtr t
     co_return;
 }
 
-coro::task<> Storage::makeMultiTextureTask(coro::latch& latch, TexturePoolPtr texturePool,
+coro::task<> Storage::makeMultiTextureTask(coro::latch& latch, BindlessTablePtr table,
                                            std::vector<ReadOnlyFilePtr> files)
 {
     std::vector<uint32_t> stagings;
@@ -134,8 +131,15 @@ coro::task<> Storage::makeMultiTextureTask(coro::latch& latch, TexturePoolPtr te
     uint32_t offset = capacity;
     int bufferId;
 
+    struct DepRequest
+    {
+        int bufferId = 0;
+        uint32_t offset = 0;
+    };
+
     // std::vector<img::ITexture*> images;
     // images.reserve(files.size());
+    std::vector<DepRequest> dependencies(files.size());
     std::vector<DSTORAGE_REQUEST> requests(files.size());
     for (int i = 0; i < files.size(); ++i)
     {
@@ -149,11 +153,11 @@ coro::task<> Storage::makeMultiTextureTask(coro::latch& latch, TexturePoolPtr te
             stagings.emplace_back(bufferId);
         }
 
-        requests[i].Destination.Buffer.Offset = offset;
-        requests[i].Destination.Buffer.Resource = buffers[bufferId].first;
-        requests[i].Destination.Buffer.Size = files[i]->sizeBytes();
+        dependencies[i] = { bufferId, offset };
+        requests[i].Destination.Memory.Buffer = m_buffers[bufferId] + offset;
+        requests[i].Destination.Memory.Size = files[i]->sizeBytes();
         requests[i].Source.File.Size = files[i]->sizeBytes();
-        queue->EnqueueRequest(&requests[i]);
+        m_queue->EnqueueRequest(&requests[i]);
 
         offset += byteSizes;
     }
@@ -165,19 +169,20 @@ coro::task<> Storage::makeMultiTextureTask(coro::latch& latch, TexturePoolPtr te
     for (size_t i = 0; i < files.size(); ++i)
     {
         const auto& file = files[i];
+        const DepRequest& dep = dependencies[i];
         const DSTORAGE_REQUEST& req = requests[i];
-        std::byte* data = buffers[0].second;
+        std::byte* data = m_buffers[dep.bufferId];
         // img::ITexture* tex = images[i];
         // tex->initFromBuffer(data + req.buffOffset);
-        img::ITexture* tex = factoryTexture(file, data + req.Destination.Buffer.Offset);
+        img::ITexture* tex = factoryTexture(file, data + dep.offset);
         std::span levels = tex->levels();
         TextureDesc desc = tex->desc();
         desc.debugName = file->getFilename();
 
-        log::info("Load texture: {}", desc.debugName);
+        uint32_t texIndex = table->allocate();
+        log::info("Load texture {:03}: {}", texIndex, desc.debugName);
         TexturePtr texture = m_device->createTexture(desc);
-        uint32_t texIndex = texturePool->allocate();
-        texturePool->setTexture(texture, texIndex);
+        table->setResource(texture, texIndex);
 
         for (const size_t mip : std::views::iota(0u, levels.size()))
         {
@@ -186,7 +191,7 @@ coro::task<> Storage::makeMultiTextureTask(coro::latch& latch, TexturePoolPtr te
 
             Subresource sub;
             sub.index = mip;
-            sub.offset = level.byteOffset + req.Destination.Buffer.Offset;
+            sub.offset = level.byteOffset + dep.offset;
             sub.width = desc.width >> mip;
             sub.height = desc.height >> mip;
             sub.rowPitch = tex->getRowPitch(mip);
@@ -216,7 +221,7 @@ coro::task<> Storage::makeBufferTask(coro::latch& latch, const ReadOnlyFilePtr& 
     request.Destination.Buffer.Resource = checked_cast<Buffer*>(buffer.get())->handle;
     request.Destination.Buffer.Offset = 0;
     request.Destination.Buffer.Size = fileLength;
-    queue->EnqueueRequest(&request);
+    m_queue->EnqueueRequest(&request);
 
     submitWait();
     latch.count_down();
