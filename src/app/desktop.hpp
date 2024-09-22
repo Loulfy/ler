@@ -43,7 +43,6 @@ class DesktopApp
     std::shared_ptr<T> addPass() { auto p = std::make_shared<T>(); m_renderPasses.emplace_back(p); return p; }
     void updateWindowIcon(const fs::path& path)const;
     void resize(int width, int height);
-    void pollPasses();
 
     render::RenderGraph& renderGraph() { return m_renderGraph; }
     // clang-format on
@@ -62,11 +61,9 @@ class DesktopApp
     rhi::DevicePtr m_device;
     rhi::SwapChainPtr m_swapChain;
     std::vector<std::shared_ptr<rhi::IRenderPass>> m_renderPasses;
-    std::vector<std::shared_ptr<rhi::IRenderPass>> m_enabledRenderPasses;
     render::MeshBuffers m_meshBuffers;
     render::RenderMeshList m_meshList;
     render::RenderGraph m_renderGraph;
-    rhi::TexturePoolPtr m_texturePool;
     cam::CameraPtr m_camera;
 };
 } // namespace ler::app

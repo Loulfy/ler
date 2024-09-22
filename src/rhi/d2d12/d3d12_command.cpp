@@ -385,7 +385,8 @@ void Command::beginRendering(const RenderingInfo& renderingInfo) const
         assert(rColorAttachment.texture);
         auto* image = checked_cast<Texture*>(rColorAttachment.texture.get());
         colors[i] = image->rtvDescriptor.getCpuHandle();
-        m_commandList->ClearRenderTargetView(image->rtvDescriptor.getCpuHandle(), color.data(), 0, nullptr);
+        if(rColorAttachment.loadOp == AttachmentLoadOp::Clear)
+            m_commandList->ClearRenderTargetView(image->rtvDescriptor.getCpuHandle(), color.data(), 0, nullptr);
     }
 
     if (renderingInfo.depth.texture)

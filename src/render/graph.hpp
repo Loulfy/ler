@@ -58,7 +58,7 @@ struct RenderDesc
 void to_json(json& j, const RenderDesc& r);
 void from_json(const json& j, RenderDesc& r);
 
-using RenderResource = std::variant<std::monostate, rhi::BufferPtr, rhi::TexturePtr, rhi::TexturePoolPtr>;
+using RenderResource = std::variant<std::monostate, rhi::BufferPtr, rhi::TexturePtr, rhi::BindlessTablePtr>;
 
 struct RenderPassDesc
 {

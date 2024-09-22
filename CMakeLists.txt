@@ -11,6 +11,7 @@ find_package(nlohmann_json CONFIG REQUIRED)
 find_package(directx-dxc CONFIG REQUIRED)
 find_package(flatbuffers CONFIG REQUIRED)
 find_package(glslang CONFIG REQUIRED)
+find_package(imgui CONFIG REQUIRED)
 find_package(xxHash CONFIG REQUIRED)
 find_package(assimp CONFIG REQUIRED)
 find_package(spdlog CONFIG REQUIRED)
@@ -64,6 +65,7 @@ set(SRC
     "src/rhi/vulkan/vulkan_swapchain.cpp"
     "src/rhi/vulkan/vulkan_command.cpp"
     "src/rhi/vulkan/vulkan_storage.cpp"
+    "src/rhi/vulkan/vulkan_imgui.cpp"
     "src/render/mesh_list.hpp"
     "src/render/mesh_list.cpp"
     "src/camera/camera.hpp"
@@ -96,6 +98,7 @@ if (CMAKE_SYSTEM_NAME STREQUAL "Windows")
         "src/rhi/d2d12/d3d12_swapchain.cpp"
         "src/rhi/d2d12/d3d12_command.cpp"
         "src/rhi/d2d12/d3d12_storage.cpp"
+        "src/rhi/d2d12/d3d12_imgui.cpp"
     )
 endif()
 
@@ -128,6 +131,7 @@ target_link_libraries(gdev PRIVATE generated_cppmessages)
 target_link_libraries(gdev PRIVATE flatbuffers::flatbuffers)
 target_link_libraries(gdev PRIVATE nlohmann_json::nlohmann_json)
 target_link_libraries(gdev PRIVATE meshoptimizer::meshoptimizer)
+target_link_libraries(gdev PRIVATE imgui::imgui)
 target_link_libraries(gdev PRIVATE xxHash::xxhash)
 target_link_libraries(gdev PRIVATE glfw)
 target_link_libraries(gdev PRIVATE gli)

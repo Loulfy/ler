@@ -12,7 +12,7 @@
 
 namespace ler::rhi::d3d12
 {
-    SwapChainPtr Device::createSwapChain(GLFWwindow* window)
+    SwapChainPtr Device::createSwapChain(GLFWwindow* window, bool vsync)
     {
         auto swapChain = std::make_shared<SwapChain>(m_context);
 
@@ -48,7 +48,7 @@ namespace ler::rhi::d3d12
         swapChain1.As(&swapChain->handle);
 
         swapChain->createNativeSync();
-        swapChain->resize(width, height);
+        swapChain->resize(width, height, vsync);
 
         return swapChain;
     }
@@ -84,7 +84,7 @@ namespace ler::rhi::d3d12
         }
     }
 
-    void SwapChain::resize(uint32_t width, uint32_t height)
+    void SwapChain::resize(uint32_t width, uint32_t height, bool vsync)
     {
         /*if (m_commandQueue && m_fence && m_fenceEvent)
         {

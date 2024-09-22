@@ -502,7 +502,7 @@ namespace ler::rhi::vulkan
             auto* image = checked_cast<Texture*>(rColorAttachment.texture.get());
             attachment.setImageView(image->view());
             attachment.setImageLayout(vk::ImageLayout::eColorAttachmentOptimal);
-            attachment.setLoadOp(vk::AttachmentLoadOp::eClear);
+            attachment.setLoadOp(static_cast<vk::AttachmentLoadOp>(rColorAttachment.loadOp));
             attachment.setStoreOp(vk::AttachmentStoreOp::eStore);
             if(attachment.loadOp == vk::AttachmentLoadOp::eClear)
                 attachment.setClearValue(vk::ClearColorValue(Color::White));

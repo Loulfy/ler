@@ -16,6 +16,9 @@ class TestLoadOneTex final : public rhi::IRenderPass
     rhi::SamplerPtr sampler;
     rhi::BindlessTablePtr table;
     rhi::Latch latch;
+    uint32_t texId = 0;
+
+    static constexpr uint32_t kTexCount = 128;
 
     [[nodiscard]] bool startup() const override
     {
@@ -25,7 +28,7 @@ class TestLoadOneTex final : public rhi::IRenderPass
     void create(const rhi::DevicePtr& device, const rhi::SwapChainPtr& swapChain) override
     {
         std::vector<rhi::ShaderModule> modules;
-        modules.emplace_back("cached/pouet.frag", "PSMain", rhi::ShaderType::Pixel);
+        modules.emplace_back("cached/quad.frag", "PSMain", rhi::ShaderType::Pixel);
         modules.emplace_back("cached/quad.vert", "VSMain", rhi::ShaderType::Vertex);
         rhi::PipelineDesc pso;
         pso.writeDepth = false;
@@ -37,7 +40,7 @@ class TestLoadOneTex final : public rhi::IRenderPass
         sampler = device->createSampler({ false });
         rhi::StoragePtr storage = device->getStorage();
 
-        table = device->createBindlessTable(16);
+        table = device->createBindlessTable(kTexCount);
         table->setSampler(sampler, 0);
 
         latch = std::make_shared<coro::latch>(1);
@@ -46,17 +49,21 @@ class TestLoadOneTex final : public rhi::IRenderPass
         //rhi::ReadOnlyFilePtr file = storage->openFile(sys::ASSETS_DIR / "sponza" / "332936164838540657.DDS");
         //rhi::ReadOnlyFilePtr file = storage->openFile(sys::ASSETS_DIR / "Textures" / "Pavement_Cobble_Leaves_BLENDSHADER_Normal.dds");
         //auto files = storage->openFiles(sys::ASSETS_DIR, ".dds");
-        auto files = storage->openFiles(R"(C:\Users\pouet\Documents\gdev\assets\Textures)", ".dds");
-        storage->requestLoadTexture(*latch, table, std::span(files.data(), 16));
+        auto files = storage->openFiles(R"(C:\Users\loria\Documents\gdev\assets\Textures)", ".dds");
+        storage->requestLoadTexture(*latch, table, std::span(files.data(), kTexCount));
         //async::sync_wait(*latch);
     }
 
     void render(rhi::TexturePtr& backBuffer, rhi::CommandPtr& command) override
     {
-        uint32_t tex = 12;
+        if (ImGui::IsKeyPressed(ImGui::GetKeyIndex(ImGuiKey_PageUp)))
+            texId++;
+        if (ImGui::IsKeyPressed(ImGui::GetKeyIndex(ImGuiKey_PageDown)))
+            texId--;
 
+        texId = std::clamp(texId, 0u, kTexCount - 1);
         command->bindPipeline(pipeline, table);
-        command->pushConstant(pipeline, &tex, sizeof(uint32_t));
+        command->pushConstant(pipeline, &texId, sizeof(uint32_t));
 
         rhi::RenderingInfo pass;
         pass.viewport = backBuffer->extent();
@@ -66,6 +73,11 @@ class TestLoadOneTex final : public rhi::IRenderPass
         command->beginRendering(pass);
         command->drawIndexed(4);
         command->endRendering();
+
+        ImGui::Begin("Hello ImGui", nullptr, ImGuiWindowFlags_NoResize);
+        ImGui::Text("Texture Index: %d", texId);
+        ImGui::Text("Application average %.3f ms/frame (%.1f FPS)", 1000.0f / ImGui::GetIO().Framerate, ImGui::GetIO().Framerate);
+        ImGui::End();
     }
 };
 
@@ -129,6 +141,7 @@ int main()
     cfg.width = 1080;
     cfg.height = 720;
     cfg.api = rhi::GraphicsAPI::VULKAN;
+    cfg.vsync = true;
     app::DesktopApp app(cfg);
     // app.loadScene("scene.mesh");
     // app.addPass<HelloTriangle>();

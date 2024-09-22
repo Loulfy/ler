@@ -302,7 +302,7 @@ namespace ler::rhi::d3d12
 
         explicit SwapChain(const D3D12Context& context) : m_context(context) { }
         uint32_t present(const RenderPass& renderPass) override;
-        void resize(uint32_t width, uint32_t height) override;
+        void resize(uint32_t width, uint32_t height, bool vsync) override;
         [[nodiscard]] Extent extent() const override;
 
         void createNativeSync();
@@ -358,6 +358,20 @@ namespace ler::rhi::d3d12
         coro::task<> makeBufferTask(coro::latch& latch, const ReadOnlyFilePtr& file, BufferPtr& buffer, uint32_t fileLength, uint32_t fileOffset) override;
     };
 
+    class ImGuiPass : public IRenderPass
+    {
+      public:
+
+        ~ImGuiPass() override;
+        void begin() override;
+        void create(const DevicePtr& device, const SwapChainPtr& swapChain) override;
+        void render(TexturePtr& backBuffer, CommandPtr& command) override;
+
+      private:
+
+          ComPtr<ID3D12DescriptorHeap> g_pd3dSrvDescHeap;
+    };
+
     class Device : public IDevice
     {
     public:
@@ -373,7 +387,7 @@ namespace ler::rhi::d3d12
         // Texture
         TexturePtr createTexture(const TextureDesc& desc) override;
         SamplerPtr createSampler(const SamplerDesc& desc) override;
-        SwapChainPtr createSwapChain(GLFWwindow* window) override;
+        SwapChainPtr createSwapChain(GLFWwindow* window, bool vsync) override;
 
         // Pipeline
         [[nodiscard]] BindlessTablePtr createBindlessTable(uint32_t count) override;

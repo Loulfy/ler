@@ -25,6 +25,7 @@ namespace fs = std::filesystem;
 namespace async = coro;
 
 #include <xxh3.h>
+#include <imgui.h>
 
 struct GLFWwindow;
 
@@ -278,7 +279,7 @@ namespace ler::rhi
     public:
         virtual ~ISwapChain() = default;
         virtual uint32_t present(const RenderPass& renderPass) = 0;
-        virtual void resize(uint32_t width, uint32_t height) = 0;
+        virtual void resize(uint32_t width, uint32_t height, bool vsync) = 0;
         [[nodiscard]] virtual Extent extent() const = 0;
         [[nodiscard]] virtual Format format() const { return Format::RGBA8_UNORM; }
 
@@ -286,38 +287,6 @@ namespace ler::rhi
     };
 
     using SwapChainPtr = std::shared_ptr<ISwapChain>;
-
-    class TexturePool
-    {
-    public:
-
-        uint32_t allocate()
-        {
-            if(m_textureCount > kBindlessMax)
-                log::exit("TexturePool Size exceeded");
-            return m_textureCount.fetch_add(1, std::memory_order_relaxed);
-        }
-
-        [[nodiscard]] TexturePtr getTexture(uint32_t texIndex) const
-        { return m_textures[texIndex]; }
-
-        void setTexture(const TexturePtr& texture, uint32_t slot)
-        { m_textures[slot] = texture; }
-
-        [[nodiscard]] uint32_t getTextureCount() const
-        { return m_textureCount; }
-        [[nodiscard]] std::span<TexturePtr> getTextures()
-        { return {m_textures.data(), m_textureCount}; }
-
-        static constexpr uint32_t kBindlessMax = 2048;
-
-    private:
-
-        std::array<TexturePtr, kBindlessMax> m_textures;
-        std::atomic_uint32_t m_textureCount = 0;
-    };
-
-    using TexturePoolPtr = std::shared_ptr<TexturePool>;
 
     class IReadOnlyFile
     {
@@ -348,7 +317,6 @@ namespace ler::rhi
         virtual void requestLoadBuffer(coro::latch& latch, const ReadOnlyFilePtr& file, BufferPtr& buffer, uint32_t fileLength, uint32_t fileOffset) = 0;
     };
 
-    using AsyncAsset = async::task<Result>;
     using StoragePtr = std::shared_ptr<IStorage>;
 
     struct DeviceConfig
@@ -372,7 +340,7 @@ namespace ler::rhi
         // Texture
         virtual TexturePtr createTexture(const TextureDesc& desc) = 0;
         virtual SamplerPtr createSampler(const SamplerDesc& desc) = 0;
-        virtual SwapChainPtr createSwapChain(GLFWwindow* window) = 0;
+        virtual SwapChainPtr createSwapChain(GLFWwindow* window, bool vsync) = 0;
 
         // Pipeline
         void shaderAutoCompile();
@@ -405,6 +373,7 @@ namespace ler::rhi
         virtual ~IRenderPass() = default;
         virtual void create(const DevicePtr& device, const SwapChainPtr& swapChain) = 0;
         virtual void render(TexturePtr& backBuffer, CommandPtr& command) = 0;
+        virtual void begin() {}
         virtual void resize(const DevicePtr& device, const Extent& viewport) {}
         [[nodiscard]] virtual bool startup() const { return true; }
     };

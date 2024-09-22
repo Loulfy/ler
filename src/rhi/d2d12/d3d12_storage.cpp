@@ -144,7 +144,7 @@ coro::task<> Storage::makeMultiTextureTask(coro::latch& latch, BindlessTablePtr 
     for (int i = 0; i < files.size(); ++i)
     {
         queueTexture(files[i], requests[i]);
-        const uint32_t byteSizes = align(files[i]->sizeBytes(), 16u);
+        const uint32_t byteSizes = files[i]->sizeBytes();//, 16u);
 
         if (offset + byteSizes > capacity)
         {
@@ -195,7 +195,7 @@ coro::task<> Storage::makeMultiTextureTask(coro::latch& latch, BindlessTablePtr 
             sub.width = desc.width >> mip;
             sub.height = desc.height >> mip;
             sub.rowPitch = tex->getRowPitch(mip);
-            cmd->copyBufferToTexture(getStaging(0), texture, sub, nullptr);
+            cmd->copyBufferToTexture(getStaging(dep.bufferId), texture, sub, nullptr);
         }
     }
 

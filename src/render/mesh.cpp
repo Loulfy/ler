@@ -48,7 +48,7 @@ void MeshBuffers::allocate(const rhi::DevicePtr& device, const flatbuffers::Vect
     }
 }
 
-void MeshBuffers::allocate(const rhi::DevicePtr& device, rhi::TexturePoolPtr texturePool, const flatbuffers::Vector<flatbuffers::Offset<scene::Material>>& materialEntries)
+void MeshBuffers::allocate(const rhi::DevicePtr& device, rhi::BindlessTablePtr& table, const flatbuffers::Vector<flatbuffers::Offset<scene::Material>>& materialEntries)
 {
     rhi::StoragePtr storage = device->getStorage();
 

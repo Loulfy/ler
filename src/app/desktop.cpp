@@ -11,6 +11,7 @@
 
 #define GLFW_INCLUDE_NONE // Do not include any OpenGL/Vulkan headers
 #include <GLFW/glfw3.h>
+#include <imgui_impl_glfw.h>
 
 namespace ler::app
 {
@@ -56,13 +57,20 @@ namespace ler::app
 #endif
 
         m_device->shaderAutoCompile();
-        m_swapChain = m_device->createSwapChain(m_window);
+        m_swapChain = m_device->createSwapChain(m_window, cfg.vsync);
+        //m_guiContext = m_device->createImGuiContext(m_window);
         m_camera = std::make_shared<cam::Camera>();
 
         if(cfg.api == rhi::GraphicsAPI::VULKAN)
             m_camera->setFlipY(true);
 
-        m_texturePool = std::make_shared<rhi::TexturePool>();
+        int w, h;
+        ImGui::CreateContext();
+        ImGuiIO& io = ImGui::GetIO();
+        glfwGetFramebufferSize(m_window, &w, &h);
+        io.DisplaySize = ImVec2(static_cast<float>(w), static_cast<float>(h));
+        // io.ConfigFlags = ImGuiConfigFlags_DockingEnable;
+        ImGui::StyleColorsDark();
     }
 
     void DesktopApp::updateWindowIcon(const fs::path& path) const
@@ -83,20 +91,25 @@ namespace ler::app
 
     void DesktopApp::resize(int width, int height)
     {
-        m_swapChain->resize(width, height);
+        m_swapChain->resize(width, height, true);
         notifyResize();
-    }
-
-    void DesktopApp::pollPasses()
-    {
-        auto cond = [](const std::shared_ptr<rhi::IRenderPass>& pass) -> bool { return pass->startup(); };
-        std::vector<std::shared_ptr<rhi::IRenderPass>> passes;
-        std::ranges::partition_copy(m_renderPasses, std::back_inserter(m_enabledRenderPasses), std::back_inserter(passes), cond);
-        m_renderPasses = std::move(passes);
     }
 
     void DesktopApp::run()
     {
+        if(m_device->getGraphicsAPI() == rhi::GraphicsAPI::VULKAN)
+        {
+            ImGui_ImplGlfw_InitForVulkan(m_window, true);
+            addPass<rhi::vulkan::ImGuiPass>();
+        }
+    #ifdef _WIN32
+        else
+        {
+            ImGui_ImplGlfw_InitForOther(m_window, true);
+            addPass<rhi::d3d12::ImGuiPass>();
+        }
+    #endif
+
         double x, y;
         for (const auto& pass : m_renderPasses)
             pass->create(m_device, m_swapChain);
@@ -106,7 +119,6 @@ namespace ler::app
         while (!glfwWindowShouldClose(m_window))
         {
             glfwPollEvents();
-            pollPasses();
 
             glfwGetCursorPos(m_window, &x, &y);
             m_camera->handleMouseMove(x, y);
@@ -117,17 +129,19 @@ namespace ler::app
             params.view = m_camera->getViewMatrix();
             params.meshes = &m_meshBuffers;
 
+            for (const auto& pass : m_renderPasses)
+                pass->begin();
+
+            ImGui_ImplGlfw_NewFrame();
+            ImGui::NewFrame();
+
             m_swapChain->present([&](rhi::TexturePtr& backBuffer, rhi::CommandPtr& command){
                 command->addImageBarrier(backBuffer, rhi::RenderTarget);
-                //command->clearColorImage(backBuffer, rhi::Color::Green);
-                /*if(m_meshBuffers.isLoaded())
+                for (const auto& pass : m_renderPasses)
                 {
-                    m_renderGraph.rebind();
-                    m_renderGraph.execute(command, backBuffer, m_meshList, params);
-                }*/
-
-                for (const auto& pass : m_enabledRenderPasses)
-                    pass->render(backBuffer, command);
+                    if(pass->startup())
+                        pass->render(backBuffer, command);
+                }
                 command->addImageBarrier(backBuffer, rhi::Present);
             });
 
@@ -136,6 +150,8 @@ namespace ler::app
 
         m_device->waitIdle();
         m_renderPasses.clear();
+        ImGui_ImplGlfw_Shutdown();
+        ImGui::DestroyContext();
         glfwDestroyWindow(m_window);
         glfwTerminate();
     }
@@ -150,7 +166,7 @@ namespace ler::app
 
         m_meshBuffers.allocate(m_device, *scene->buffers());
         m_meshBuffers.load(*scene->meshes());
-        m_meshBuffers.allocate(m_device, m_texturePool, *scene->materials());
+        //m_meshBuffers.allocate(m_device, m_texturePool, *scene->materials());
         /*m_meshList.installStaticScene(m_device, *scene->instances());
         m_renderGraph.addResource("instances", m_meshList.getInstanceBuffer());
         m_renderGraph.addResource("meshes", m_meshBuffers.getMeshBuffer());

@@ -67,7 +67,7 @@ namespace ler::rhi
 
     enum class AttachmentLoadOp : uint8_t
     {
-        Load,
+        Load = 0,
         Clear,
         DontCare
     };

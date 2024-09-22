@@ -243,7 +243,7 @@ namespace ler::rhi::vulkan
         m_context.allocator = allocator;
         m_context.debug = config.debug;
 
-        m_bindlessLayout = BindlessTable::buildBindlessLayout(m_context, 16, true);
+        m_bindlessLayout = BindlessTable::buildBindlessLayout(m_context, 128, true);
         m_context.bindlessLayout = m_bindlessLayout.get();
 
         m_context.hostBuffer = config.hostBuffer;

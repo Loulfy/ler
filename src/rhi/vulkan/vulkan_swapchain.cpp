@@ -57,7 +57,7 @@ namespace ler::rhi::vulkan
         }
     }
 
-    SwapChainPtr Device::createSwapChain(GLFWwindow* window)
+    SwapChainPtr Device::createSwapChain(GLFWwindow* window, bool vsync)
     {
         auto swapChain = std::make_shared<SwapChain>(m_context);
 
@@ -86,7 +86,7 @@ namespace ler::rhi::vulkan
         swapChain->device = this;
         swapChain->createInfo = createInfo;
         swapChain->createNativeSync();
-        swapChain->resize(width, height);
+        swapChain->resize(width, height, vsync);
 
         return swapChain;
     }
@@ -106,7 +106,7 @@ namespace ler::rhi::vulkan
         }
     }
 
-    void SwapChain::resize(uint32_t width, uint32_t height)
+    void SwapChain::resize(uint32_t width, uint32_t height, bool vsync)
     {
         // we can not create minimized swap chain
         if(width == 0 || height == 0)
@@ -122,7 +122,7 @@ namespace ler::rhi::vulkan
 
         const vk::Extent2D extent = SwapChain::chooseSwapExtent(surfaceCapabilities, width, height);
         vk::SurfaceFormatKHR surfaceFormat = SwapChain::chooseSwapSurfaceFormat(surfaceFormats);
-        vk::PresentModeKHR presentMode = SwapChain::chooseSwapPresentMode(surfacePresentModes, false);
+        vk::PresentModeKHR presentMode = SwapChain::chooseSwapPresentMode(surfacePresentModes, vsync);
 
         uint32_t backBufferCount = std::clamp(surfaceCapabilities.minImageCount, 1U, FrameCount);
 
@@ -215,7 +215,7 @@ namespace ler::rhi::vulkan
         result = m_queue.presentKHR(&presentInfo);
         assert(result == vk::Result::eSuccess || result == vk::Result::eSuboptimalKHR);
 
-        currentFrame = (currentFrame + 1) % ISwapChain::FrameCount;
+        currentFrame = (currentFrame + 1) % createInfo.minImageCount;
         return currentFrame;
     }
 }

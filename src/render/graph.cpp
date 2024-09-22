@@ -276,11 +276,11 @@ void RenderGraph::bindResource(const rhi::PipelinePtr& pipeline, const RenderDes
         else
             pipeline->updateStorage(descriptor, res.binding, buf, 256);
     }
-    else if (std::holds_alternative<rhi::TexturePoolPtr>(r))
+    else if (std::holds_alternative<rhi::BindlessTablePtr>(r))
     {
-        auto& pool = std::get<rhi::TexturePoolPtr>(r);
-        if (pool->getTextureCount() > 1)
-            pipeline->updateSampler(descriptor, res.binding, samplerGlobal, pool->getTextures());
+        auto& pool = std::get<rhi::BindlessTablePtr>(r);
+        //if (pool->getTextureCount() > 1)
+          //  pipeline->updateSampler(descriptor, res.binding, samplerGlobal, pool->getTextures());
     }
 }
 

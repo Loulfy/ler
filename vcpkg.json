@@ -53,9 +53,6 @@
     "platform" : "windows",
     "$comment" : "    find_package(dstorage CONFIG REQUIRED)\n\n    target_link_libraries(main PRIVATE Microsoft::DirectStorage)\n"
   }, {
-    "name" : "cpp-async",
-    "version>=" : "1.1.0"
-  }, {
     "name" : "assimp",
     "version>=" : "5.3.1#3",
     "$comment" : "  # this is heuristically generated, and may not be correct\n\n  find_package(assimp CONFIG REQUIRED)\n\n  target_link_libraries(main PRIVATE assimp::assimp)\n"
@@ -84,5 +81,11 @@
   }, {
     "name" : "vcpkg-pkgconfig-get-modules",
     "version>=" : "2024-04-03"
+  }, {
+    "name" : "imgui",
+    "version>=" : "1.91.0",
+    "features" : [ "glfw-binding", "vulkan-binding", {"name": "dx12-binding",
+      "platform": "windows"
+    } ]
   } ]
 }
