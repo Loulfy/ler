@@ -58,7 +58,6 @@ namespace ler::app
 
         m_device->shaderAutoCompile();
         m_swapChain = m_device->createSwapChain(m_window, cfg.vsync);
-        //m_guiContext = m_device->createImGuiContext(m_window);
         m_camera = std::make_shared<cam::Camera>();
 
         if(cfg.api == rhi::GraphicsAPI::VULKAN)

@@ -28,7 +28,8 @@ namespace ler::rhi
         virtual rhi::CommandPtr createCommandBuffer() = 0;
         void retireCommandBuffers();
 
-        std::mutex m_mutex;
+        std::mutex m_mutexSend;
+        std::mutex m_mutexPool;
         QueueType m_queueType = QueueType::Graphics;
 
         uint64_t m_lastSubmittedID = 0;

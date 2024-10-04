@@ -2,6 +2,7 @@
 // Created by loulfy on 03/12/2023.
 //
 
+#include "rhi/ref.hpp"
 #include "rhi/rhi.hpp"
 
 #ifdef _WIN32
@@ -159,23 +160,11 @@ ShaderModule convertShaderExtension(const fs::path& path)
 static void compileShaderHlsl(const ShaderModule& shaderModule, const fs::path& output)
 {
     std::wstring targetProfile = convertShaderStageHlsl(shaderModule.stage);
+    std::wstring entryPoint = sys::toUtf16(shaderModule.entryPoint);
 
-    std::locale loc;
-    using wchar_facet = std::ctype<wchar_t>;
-    std::wstring entryPoint;
-    const std::string& s = shaderModule.entryPoint;
-    if (std::has_facet<wchar_facet>(loc))
-    {
-        std::vector<wchar_t> to(s.size() + 2, 0);
-        std::vector<wchar_t>::pointer toPtr = to.data();
-        const auto& facet = std::use_facet<wchar_facet>(loc);
-        if (facet.widen(s.c_str(), s.c_str() + s.size(), toPtr) != nullptr)
-            entryPoint = to.data();
-    }
-
-    IDxcCompiler* compiler;
-    IDxcUtils* utils;
-    IDxcIncludeHandler* includeHandler;
+    RefPtr<IDxcCompiler> compiler;
+    RefPtr<IDxcUtils> utils;
+    RefPtr<IDxcIncludeHandler> includeHandler;
     DxcCreateInstance(CLSID_DxcUtils, IID_PPV_ARGS(&utils));
     DxcCreateInstance(CLSID_DxcCompiler, IID_PPV_ARGS(&compiler));
     utils->CreateDefaultIncludeHandler(&includeHandler);
@@ -209,24 +198,24 @@ static void compileShaderHlsl(const ShaderModule& shaderModule, const fs::path& 
     const fs::path path = sys::ASSETS_DIR / shaderModule.path;
 
     // Load the shader source file to a blob.
-    IDxcBlobEncoding* sourceBlob;
+    RefPtr<IDxcBlobEncoding> sourceBlob;
     std::wstring source = sys::toUtf16(path.string());
     HRESULT hr = utils->LoadFile(source.c_str(), nullptr, &sourceBlob);
     if (FAILED(hr))
         log::error("Failed to open shader with path : {}", shaderModule.path.string());
 
     // Compile the shader.
-    IDxcOperationResult* result;
+    RefPtr<IDxcOperationResult> result;
     hr = compiler->Compile(
-        sourceBlob, source.c_str(), entryPoint.c_str(), targetProfile.c_str(), compilationArguments.data(),
-        static_cast<uint32_t>(compilationArguments.size()), &spirv, defineCount, includeHandler, &result);
+        sourceBlob.Get(), source.c_str(), entryPoint.c_str(), targetProfile.c_str(), compilationArguments.data(),
+        static_cast<uint32_t>(compilationArguments.size()), &spirv, defineCount, includeHandler.Get(), &result);
     if (FAILED(hr))
     {
         log::error("Failed to compile shader with path : {}", shaderModule.path.string());
     }
 
     // Get compilation errors (if any).
-    IDxcBlobEncoding* errors;
+    RefPtr<IDxcBlobEncoding> errors;
     result->GetErrorBuffer(&errors);
     if (errors && errors->GetBufferSize() > 0)
     {
@@ -235,7 +224,7 @@ static void compileShaderHlsl(const ShaderModule& shaderModule, const fs::path& 
         return;
     }
 
-    IDxcBlob* bytecode;
+    RefPtr<IDxcBlob> bytecode;
     result->GetResult(&bytecode);
 
     std::ofstream file(output, std::ios::out | std::ios::binary);

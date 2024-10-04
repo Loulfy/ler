@@ -284,14 +284,14 @@ namespace ler::rhi::d3d12
 
         // submission
         uint64_t submit(const std::span<CommandPtr>& ppCmd);
-
-        ComPtr<ID3D12Fence> fence;
+        void submitAndWait(const rhi::CommandPtr& command);
 
     private:
 
         rhi::CommandPtr createCommandBuffer() override;
 
         const D3D12Context& m_context;
+        ComPtr<ID3D12Fence> m_fence;
         ComPtr<ID3D12CommandQueue> m_commandQueue;
         D3D12_COMMAND_LIST_TYPE m_commandType = {};
     };

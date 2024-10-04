@@ -23,18 +23,7 @@ namespace ler::rhi::vulkan
 
     void Device::submitOneShot(const CommandPtr& command)
     {
-        Queue::CommandPtr cmd = std::static_pointer_cast<Command>(command);
-        m_queues[int(cmd->queueType)]->submitAndWait(cmd);
-
-        /*native->cmdBuf.end();
-        vk::UniqueFence fence = m_context.device.createFenceUnique({});
-
-        vk::SubmitInfo submitInfo;
-        submitInfo.setCommandBuffers(native->cmdBuf);
-        m_queues[int(native->queueType)]->m_queue.submit(submitInfo, fence.get());
-
-        auto res = m_context.device.waitForFences(fence.get(), true, std::numeric_limits<uint64_t>::max());
-        assert(res == vk::Result::eSuccess);*/
+        m_queues[int(command->queueType)]->submitAndWait(command);
     }
 
     void Device::runGarbageCollection()
@@ -161,9 +150,12 @@ namespace ler::rhi::vulkan
         nativeCmd->cmdBuf.end();
         vk::UniqueFence fence = m_context.device.createFenceUnique({});
 
-        vk::SubmitInfo submitInfo;
-        submitInfo.setCommandBuffers(nativeCmd->cmdBuf);
-        m_queue.submit(submitInfo, fence.get());
+        {
+            std::lock_guard lock(m_mutexSend);
+            vk::SubmitInfo submitInfo;
+            submitInfo.setCommandBuffers(nativeCmd->cmdBuf);
+            m_queue.submit(submitInfo, fence.get());
+        }
 
         auto res = m_context.device.waitForFences(fence.get(), true, std::numeric_limits<uint64_t>::max());
         assert(res == vk::Result::eSuccess);

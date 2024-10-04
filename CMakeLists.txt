@@ -27,6 +27,7 @@ add_definitions(-DPROJECT_DIR=\"${PROJECT_SOURCE_DIR}\")
 
 set(SRC
     "src/log/log.hpp"
+    "src/rhi/ref.hpp"
     "src/rhi/rhi.hpp"
     "src/rhi/format.cpp"
     "src/sys/utils.hpp"

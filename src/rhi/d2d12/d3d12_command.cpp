@@ -22,23 +22,7 @@ void Device::submitCommand(CommandPtr& command)
 
 void Device::submitOneShot(const CommandPtr& command)
 {
-    auto* native = checked_cast<Command*>(command.get());
-
-    native->m_commandList->Close();
-
-    ComPtr<ID3D12Fence> fence;
-    m_device->CreateFence(0, D3D12_FENCE_FLAG_NONE, IID_PPV_ARGS(&fence));
-    HANDLE event = CreateEvent(nullptr, FALSE, FALSE, nullptr);
-
-    // Execute the command list.
-    ID3D12CommandList* ppCommandLists[] = { native->m_commandList.Get() };
-    ID3D12CommandQueue* commandQueue = m_queues[int(native->queueType)]->m_commandQueue.Get();
-    commandQueue->ExecuteCommandLists(1, ppCommandLists);
-    commandQueue->Signal(fence.Get(), 1);
-
-    fence->SetEventOnCompletion(1, event);
-    WaitForSingleObjectEx(event, INFINITE, FALSE);
-    CloseHandle(event);
+    m_queues[int(command->queueType)]->submitAndWait(command);
 }
 
 void Device::runGarbageCollection()
@@ -66,7 +50,7 @@ Queue::Queue(const D3D12Context& context, QueueType queueID) : rhi::Queue(queueI
 
     queueDesc.Type = m_commandType;
     m_context.device->CreateCommandQueue(&queueDesc, IID_PPV_ARGS(&m_commandQueue));
-    m_context.device->CreateFence(0, D3D12_FENCE_FLAG_NONE, IID_PPV_ARGS(&fence));
+    m_context.device->CreateFence(0, D3D12_FENCE_FLAG_NONE, IID_PPV_ARGS(&m_fence));
 }
 
 rhi::CommandPtr Queue::createCommandBuffer()
@@ -83,7 +67,7 @@ rhi::CommandPtr Queue::createCommandBuffer()
 
 uint64_t Queue::updateLastFinishedID()
 {
-    m_lastFinishedID = fence->GetCompletedValue();
+    m_lastFinishedID = m_fence->GetCompletedValue();
     return m_lastFinishedID;
 }
 
@@ -106,9 +90,32 @@ uint64_t Queue::submit(const std::span<CommandPtr>& ppCmd)
     }
 
     m_commandQueue->ExecuteCommandLists(commandLists.size(), commandLists.data());
-    m_commandQueue->Signal(fence.Get(), m_lastSubmittedID);
+    m_commandQueue->Signal(m_fence.Get(), m_lastSubmittedID);
 
     return m_lastSubmittedID;
+}
+
+void Queue::submitAndWait(const rhi::CommandPtr& command)
+{
+    auto* native = checked_cast<Command*>(command.get());
+    native->m_commandList->Close();
+
+    ComPtr<ID3D12Fence> fence;
+    m_context.device->CreateFence(0, D3D12_FENCE_FLAG_NONE, IID_PPV_ARGS(&fence));
+    HANDLE event = CreateEvent(nullptr, FALSE, FALSE, nullptr);
+
+    {
+        std::lock_guard lock(m_mutexSend);
+        // Execute the command list.
+        ID3D12CommandList* ppCommandLists[] = { native->m_commandList.Get() };
+        ID3D12CommandQueue* commandQueue = m_commandQueue.Get();
+        commandQueue->ExecuteCommandLists(1, ppCommandLists);
+        commandQueue->Signal(fence.Get(), 1);
+    }
+
+    fence->SetEventOnCompletion(1, event);
+    WaitForSingleObjectEx(event, INFINITE, FALSE);
+    CloseHandle(event);
 }
 
 D3D12_RESOURCE_STATES Device::util_to_d3d_resource_state(ResourceState usage)

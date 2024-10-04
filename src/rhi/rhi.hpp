@@ -298,13 +298,6 @@ namespace ler::rhi
 
     using ReadOnlyFilePtr = std::shared_ptr<IReadOnlyFile>;
 
-    struct Result
-    {
-        bool succeeded = false;
-        std::string error;
-        uint32_t slot = 0;
-    };
-
     class IStorage
     {
     public:

@@ -13,7 +13,7 @@ namespace ler::rhi
 
     void Queue::retireCommandBuffers()
     {
-        std::lock_guard lock(m_mutex);
+        std::lock_guard lock(m_mutexPool);
         std::vector<CommandPtr> submissions = std::move(m_commandBuffersInFlight);
 
         uint64_t lastFinishedID = updateLastFinishedID();
@@ -35,7 +35,7 @@ namespace ler::rhi
 
     rhi::CommandPtr Queue::getOrCreateCommandBuffer()
     {
-        std::lock_guard lock(m_mutex);
+        std::lock_guard lock(m_mutexPool);
         rhi::CommandPtr command;
         if (m_commandBuffersPool.empty())
         {
