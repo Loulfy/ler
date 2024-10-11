@@ -213,4 +213,110 @@ Format stringToFormat(const std::string& name)
 
     return Format::UNKNOWN;
 }
+
+void from_json(const json& j, ShaderModule& s)
+{
+    if (j.contains("path"))
+        s.path = fs::path(j["path"].get<std::string>());
+    if (j.contains("name"))
+        s.name = j["name"];
+    if (j.contains("entryPoint"))
+        s.entryPoint = j["entryPoint"];
+    if (j.contains("stage"))
+    {
+        const std::string_view& stage = j["stage"];
+        if (stage == "Vertex")
+            s.stage = ShaderType::Vertex;
+        else if (stage == "Pixel")
+            s.stage = ShaderType::Pixel;
+        else if (stage == "Compute")
+            s.stage = ShaderType::Compute;
+    }
+    if (j.contains("backend"))
+    {
+        const std::string_view& backend = j["backend"];
+        if (backend == "vulkan")
+            s.backend = GraphicsAPI::VULKAN;
+        else if (backend == "d3d12")
+            s.backend = GraphicsAPI::D3D12;
+    }
+}
+
+void to_json(json& j, const ShaderModule& s)
+{
+    j["name"] = s.name;
+    j["path"] = s.path.c_str();
+    j["entryPoint"] = s.entryPoint;
+    if (s.backend == GraphicsAPI::VULKAN)
+        j["backend"] = "vulkan";
+    else
+        j["backend"] = "d3d12";
+    switch (s.stage)
+    {
+    case ShaderType::Compute:
+        j["stage"] = "Compute";
+        break;
+    case ShaderType::Vertex:
+        j["stage"] = "Vertex";
+        break;
+    case ShaderType::Geometry:
+        j["stage"] = "Geometry";
+        break;
+    case ShaderType::Pixel:
+        j["stage"] = "Pixel";
+        break;
+    default:
+        j["stage"] = "NotImpl";
+        break;
+    }
+}
+
+void from_json(const json& j, PipelineDesc& d)
+{
+    if (j.contains("topology"))
+    {
+        const std::string_view& primitive = j["topology"];
+        if (primitive == "triangleStrip")
+            d.topology = PrimitiveType::TriangleStrip;
+    }
+    if (j.contains("colors"))
+    {
+        const std::vector<std::string>& colors = j["colors"];
+        for (auto& color : colors)
+            d.colorAttach.emplace_back(stringToFormat(color));
+    }
+}
+
+void to_json(json& j, const PipelineDesc& d)
+{
+    switch (d.topology)
+    {
+    default:
+    case PrimitiveType::TriangleStrip:
+        j["topology"] = "triangleStrip";
+        break;
+    case PrimitiveType::TriangleList:
+        j["topology"] = "triangleList";
+        break;
+    }
+    j["depth"] = to_string(d.depthAttach);
+    j["colors"] = d.colorAttach | std::views::transform([](const Format& f){ return to_string(f); }) | std::ranges::to<std::vector>();
+}
+
+void from_json(const json& j, PsoCache& p)
+{
+    if (j.contains("name"))
+        p.name = j["name"];
+    if (j.contains("modules"))
+        p.modules = j["modules"];
+    if (j.contains("desc"))
+        p.desc = j["desc"];
+}
+
+void to_json(json& j, const PsoCache& p)
+{
+    j["name"] = p.name;
+    j["desc"] = p.desc;
+    j["modules"] = p.modules;
+}
 } // namespace ler::rhi

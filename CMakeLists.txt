@@ -55,6 +55,8 @@ set(SRC
     "src/rhi/bindless.cpp"
     "src/rhi/storage.hpp"
     "src/rhi/storage.cpp"
+    "src/rhi/library.hpp"
+    "src/rhi/library.cpp"
     "src/app/desktop.hpp"
     "src/app/desktop.cpp"
     "src/rhi/shader/compiler.cpp"
@@ -66,6 +68,7 @@ set(SRC
     "src/rhi/vulkan/vulkan_swapchain.cpp"
     "src/rhi/vulkan/vulkan_command.cpp"
     "src/rhi/vulkan/vulkan_storage.cpp"
+    "src/rhi/vulkan/vulkan_library.cpp"
     "src/rhi/vulkan/vulkan_imgui.cpp"
     "src/render/mesh_list.hpp"
     "src/render/mesh_list.cpp"
@@ -99,6 +102,7 @@ if (CMAKE_SYSTEM_NAME STREQUAL "Windows")
         "src/rhi/d2d12/d3d12_swapchain.cpp"
         "src/rhi/d2d12/d3d12_command.cpp"
         "src/rhi/d2d12/d3d12_storage.cpp"
+        "src/rhi/d2d12/d3d12_library.cpp"
         "src/rhi/d2d12/d3d12_imgui.cpp"
     )
 endif()

@@ -239,6 +239,14 @@ namespace ler::rhi
 
     using PipelinePtr = std::shared_ptr<IPipeline>;
 
+    struct PsoCache
+    {
+        std::string name;
+        PipelineDesc desc;
+        PipelinePtr pipeline;
+        std::vector<ShaderModule> modules;
+    };
+
     class ICommand
     {
     public:
@@ -343,6 +351,8 @@ namespace ler::rhi
         [[nodiscard]] virtual PipelinePtr createGraphicsPipeline(const std::vector<ShaderModule>& shaderModules, const PipelineDesc& desc) = 0;
         [[nodiscard]] virtual PipelinePtr createComputePipeline(const ShaderModule& shaderModule) = 0;
 
+        [[nodiscard]] virtual PipelinePtr loadPipeline(const std::string& name, const PipelineDesc& desc) = 0;
+
         [[nodiscard]] virtual GraphicsAPI getGraphicsAPI() const = 0;
 
         // Execution
@@ -382,4 +392,8 @@ namespace ler::rhi
     std::string to_string(ShaderType stageType);
     std::string to_string(ResourceState state);
     std::string to_string(Format format);
+
+    void from_json(const json& j, PsoCache& p);
+    void from_json(const json& j, ShaderModule& s);
+    void to_json(json& j, const PsoCache& p);
 }

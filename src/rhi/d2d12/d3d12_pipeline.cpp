@@ -100,7 +100,7 @@ namespace ler::rhi::d3d12
         }
     }
 
-    static D3D_PRIMITIVE_TOPOLOGY convertTopology(PrimitiveType primitive)
+    D3D_PRIMITIVE_TOPOLOGY Device::convertTopology(PrimitiveType primitive)
     {
         switch(primitive)
         {
@@ -326,6 +326,53 @@ namespace ler::rhi::d3d12
         }
     }
 
+    void Device::fillGraphicsPsoDesc(const PipelineDesc& desc, const std::span<ShaderPtr>& shaders, D3D12_GRAPHICS_PIPELINE_STATE_DESC& psoDesc)
+    {
+        psoDesc.RasterizerState = CD3DX12_RASTERIZER_DESC(D3D12_DEFAULT);
+        psoDesc.RasterizerState.CullMode = D3D12_CULL_MODE_NONE;
+        psoDesc.RasterizerState.FrontCounterClockwise = true;
+        if(desc.fillMode == RasterFillMode::Solid)
+            psoDesc.RasterizerState.FillMode = D3D12_FILL_MODE_SOLID;
+        else
+            psoDesc.RasterizerState.FillMode = D3D12_FILL_MODE_WIREFRAME;
+        psoDesc.BlendState = CD3DX12_BLEND_DESC(D3D12_DEFAULT);
+        psoDesc.DepthStencilState.DepthEnable = desc.writeDepth;
+        psoDesc.DepthStencilState.DepthFunc = D3D12_COMPARISON_FUNC_LESS_EQUAL;
+        psoDesc.DepthStencilState.StencilEnable = false;
+        psoDesc.DepthStencilState.DepthWriteMask = D3D12_DEPTH_WRITE_MASK_ALL;
+        psoDesc.SampleMask = UINT_MAX;
+        psoDesc.PrimitiveTopologyType = convertPrimitive(desc.topology);
+        psoDesc.NumRenderTargets = desc.colorAttach.size();
+        for(size_t i = 0; i < desc.colorAttach.size(); ++i)
+            psoDesc.RTVFormats[i] = convertFormatRtv(desc.colorAttach[i]);
+        psoDesc.SampleDesc.Count = desc.sampleCount;
+        psoDesc.DSVFormat = convertFormatRtv(desc.depthAttach);
+
+        ID3DBlob* bytecode;
+        for(const ShaderPtr& shader : shaders)
+        {
+            bytecode = reinterpret_cast<ID3DBlob*>(shader->bytecode.Get());
+            if(shader->stage == ShaderType::Vertex)
+            {
+                psoDesc.VS = CD3DX12_SHADER_BYTECODE(bytecode);
+                psoDesc.InputLayout = { shader->inputElementDescs.data(), uint32_t(shader->inputElementDescs.size()) };
+            }
+            else if(shader->stage == ShaderType::Pixel)
+                psoDesc.PS = CD3DX12_SHADER_BYTECODE(bytecode);
+        }
+    }
+
+    void Device::fillComputePsoDesc(const std::span<ShaderPtr>& shaders, D3D12_COMPUTE_PIPELINE_STATE_DESC& psoDesc)
+    {
+        ID3DBlob* bytecode;
+        for(const ShaderPtr& shader : shaders)
+        {
+            bytecode = reinterpret_cast<ID3DBlob*>(shader->bytecode.Get());
+            if (shader->stage == ShaderType::Compute)
+                psoDesc.CS = CD3DX12_SHADER_BYTECODE(bytecode);
+        }
+    }
+
     PipelinePtr Device::createGraphicsPipeline(const std::vector<ShaderModule>& shaderModules, const PipelineDesc& desc)
     {
         std::vector<ShaderPtr> shaders;
@@ -349,40 +396,7 @@ namespace ler::rhi::d3d12
         // Describe and create the graphics pipeline state objects (PSO).
         D3D12_GRAPHICS_PIPELINE_STATE_DESC psoDesc = {};
         psoDesc.pRootSignature = pipeline->rootSignature.Get();
-
-        ID3DBlob* bytecode;
-        for(const ShaderPtr& shader : shaders)
-        {
-            bytecode = reinterpret_cast<ID3DBlob*>(shader->bytecode.Get());
-            if(shader->stage == ShaderType::Vertex)
-            {
-                psoDesc.VS = CD3DX12_SHADER_BYTECODE(bytecode);
-                psoDesc.InputLayout = { shader->inputElementDescs.data(), uint32_t(shader->inputElementDescs.size()) };
-            }
-            else if(shader->stage == ShaderType::Pixel)
-                psoDesc.PS = CD3DX12_SHADER_BYTECODE(bytecode);
-        }
-
-        psoDesc.RasterizerState = CD3DX12_RASTERIZER_DESC(D3D12_DEFAULT);
-        psoDesc.RasterizerState.CullMode = D3D12_CULL_MODE_NONE;
-        psoDesc.RasterizerState.FrontCounterClockwise = true;
-        if(desc.fillMode == RasterFillMode::Solid)
-            psoDesc.RasterizerState.FillMode = D3D12_FILL_MODE_SOLID;
-        else
-            psoDesc.RasterizerState.FillMode = D3D12_FILL_MODE_WIREFRAME;
-        psoDesc.BlendState = CD3DX12_BLEND_DESC(D3D12_DEFAULT);
-        psoDesc.DepthStencilState.DepthEnable = desc.writeDepth;
-        psoDesc.DepthStencilState.DepthFunc = D3D12_COMPARISON_FUNC_LESS_EQUAL;
-        psoDesc.DepthStencilState.StencilEnable = false;
-        psoDesc.DepthStencilState.DepthWriteMask = D3D12_DEPTH_WRITE_MASK_ALL;
-        psoDesc.SampleMask = UINT_MAX;
-        psoDesc.PrimitiveTopologyType = convertPrimitive(desc.topology);
-        psoDesc.NumRenderTargets = desc.colorAttach.size();
-        for(size_t i = 0; i < desc.colorAttach.size(); ++i)
-            psoDesc.RTVFormats[i] = convertFormatRtv(desc.colorAttach[i]);
-        psoDesc.SampleDesc.Count = desc.sampleCount;
-        psoDesc.DSVFormat = convertFormatRtv(desc.depthAttach);
-
+        fillGraphicsPsoDesc(desc, shaders, psoDesc);
         m_device->CreateGraphicsPipelineState(&psoDesc, IID_PPV_ARGS(&pipeline->pipelineState));
 
         return pipeline;
@@ -399,10 +413,9 @@ namespace ler::rhi::d3d12
         pipeline->initRootSignature();
         pipeline->m_graphics = false;
 
-        auto* bytecode = reinterpret_cast<ID3DBlob*>(shader->bytecode.Get());
         D3D12_COMPUTE_PIPELINE_STATE_DESC psoDesc = {};
         psoDesc.pRootSignature = pipeline->rootSignature.Get();
-        psoDesc.CS = CD3DX12_SHADER_BYTECODE(bytecode);
+        fillComputePsoDesc(std::span(&shader, 1), psoDesc);
 
         m_device->CreateComputePipelineState(&psoDesc, IID_PPV_ARGS(&pipeline->pipelineState));
 

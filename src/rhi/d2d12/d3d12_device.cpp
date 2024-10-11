@@ -113,6 +113,7 @@ namespace ler::rhi::d3d12
         D3D12MA::CreateAllocator(&allocatorDesc, &m_allocator);
 
         m_context.device = m_device.Get();
+        m_context.adapter = m_adapter.Get();
         m_context.storage = m_dStorage.Get();
 
         for(size_t i = 0; i < m_context.descriptorPool.size(); ++i)
@@ -132,6 +133,7 @@ namespace ler::rhi::d3d12
         m_threadPool = std::make_shared<coro::thread_pool>(coro::thread_pool::options{ .thread_count = 8 });
 
         m_storage = std::make_shared<Storage>(this, m_threadPool);
+        m_library = std::make_shared<PSOLibrary>(this);
     }
 
     void Buffer::uploadFromMemory(const void* src, uint32_t byteSize) const

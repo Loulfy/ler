@@ -107,6 +107,7 @@ namespace ler::rhi::d3d12
     struct D3D12Context
     {
         ID3D12Device* device = nullptr;
+        IDXGIAdapter1* adapter = nullptr;
         IDStorageFactory* storage = nullptr;
         ID3D12CommandQueue* queue = nullptr;
         std::array<std::unique_ptr<DescriptorHeapAllocator>,D3D12_DESCRIPTOR_HEAP_TYPE_NUM_TYPES> descriptorPool;
@@ -220,6 +221,7 @@ namespace ler::rhi::d3d12
         std::multimap<uint32_t, ShaderBindDesc> bindingMap;
         D3D_PRIMITIVE_TOPOLOGY topology = {};
 
+        void markDescriptorHeapIndexing() { m_descriptorHeapIndexing = true; }
         void merge(int type, DescriptorRanges& ranges);
         void initRootSignature();
 
@@ -358,6 +360,47 @@ namespace ler::rhi::d3d12
         coro::task<> makeBufferTask(coro::latch& latch, const ReadOnlyFilePtr& file, BufferPtr& buffer, uint32_t fileLength, uint32_t fileOffset) override;
     };
 
+    class MappedFile
+    {
+      public:
+        ~MappedFile();
+        void reset(const std::wstring& path);
+        void close();
+
+        [[nodiscard]] void* getData() const;
+        [[nodiscard]] uint64_t getSize() const;
+
+      private:
+        void open(const std::wstring& path);
+
+        HANDLE m_file = INVALID_HANDLE_VALUE;
+        HANDLE m_mapping = INVALID_HANDLE_VALUE;
+        void* m_mappedData = nullptr;
+        uint64_t m_mappedSize = 0;
+    };
+
+    class PSOLibrary
+    {
+      public:
+
+        ~PSOLibrary();
+        explicit PSOLibrary(Device* device);
+        void destroy();
+
+        void build(PsoCache& psoCache);
+        PipelinePtr loadPipeline(const std::string& name, const PipelineDesc& desc);
+
+      private:
+
+        static constexpr std::string_view kLibExt = ".plo";
+
+        Device* m_device = nullptr;
+        std::wstring m_pathLib;
+        MappedFile m_mappedFile;
+        std::map<std::string, PsoCache> m_pipelines;
+        ComPtr<ID3D12PipelineLibrary> m_pipelineLibrary;
+    };
+
     class ImGuiPass : public IRenderPass
     {
       public:
@@ -395,6 +438,8 @@ namespace ler::rhi::d3d12
         [[nodiscard]] rhi::PipelinePtr createGraphicsPipeline(const std::vector<ShaderModule>& shaderModules, const PipelineDesc& desc) override;
         [[nodiscard]] rhi::PipelinePtr createComputePipeline(const ShaderModule& shaderModule) override;
 
+        [[nodiscard]] PipelinePtr loadPipeline(const std::string& name, const PipelineDesc& desc) override;
+
         // Execution
         void waitIdle() override;
         [[nodiscard]] CommandPtr createCommand(QueueType type) override;
@@ -413,6 +458,9 @@ namespace ler::rhi::d3d12
         [[nodiscard]] ComPtr<ID3D12CommandQueue> getGraphicsQueue() const { return m_queues[int(QueueType::Graphics)]->m_commandQueue; }
 
         static D3D12_RESOURCE_STATES util_to_d3d_resource_state(ResourceState usage);
+        static void fillGraphicsPsoDesc(const PipelineDesc& desc, const std::span<ShaderPtr>& shaders, D3D12_GRAPHICS_PIPELINE_STATE_DESC& psoDesc);
+        static void fillComputePsoDesc(const std::span<ShaderPtr>& shaders, D3D12_COMPUTE_PIPELINE_STATE_DESC& psoDesc);
+        static D3D_PRIMITIVE_TOPOLOGY convertTopology(PrimitiveType primitive);
 
     private:
 
@@ -428,6 +476,7 @@ namespace ler::rhi::d3d12
         std::array<std::unique_ptr<Queue>, uint32_t(QueueType::Count)> m_queues;
         std::shared_ptr<coro::thread_pool> m_threadPool;
         std::shared_ptr<IStorage> m_storage;
+        std::shared_ptr<PSOLibrary> m_library;
     };
 
     DevicePtr CreateDevice(const DeviceConfig& config);

@@ -342,6 +342,13 @@ namespace ler::rhi::vulkan
         coro::task<> makeBufferTask(coro::latch& latch, const ReadOnlyFilePtr& file, BufferPtr& buffer, uint32_t fileLength, uint32_t fileOffset) override;
     };
 
+    class PSOLibrary
+    {
+      public:
+        ~PSOLibrary();
+        explicit PSOLibrary(Device* device);
+    };
+
     class ImGuiPass : public IRenderPass
     {
       public:
@@ -379,6 +386,8 @@ namespace ler::rhi::vulkan
         [[nodiscard]] rhi::PipelinePtr createGraphicsPipeline(const std::vector<ShaderModule>& shaderModules, const PipelineDesc& desc) override;
         [[nodiscard]] rhi::PipelinePtr createComputePipeline(const ShaderModule& shaderModule) override;
 
+        [[nodiscard]] rhi::PipelinePtr loadPipeline(const std::string& name, const PipelineDesc& desc) override;
+
         // Execution
         void waitIdle() override;
         [[nodiscard]] CommandPtr createCommand(QueueType type) override;
@@ -415,6 +424,7 @@ namespace ler::rhi::vulkan
         VulkanContext m_context;
         std::array<std::unique_ptr<Queue>, uint32_t(QueueType::Count)> m_queues;
         std::shared_ptr<Storage> m_storage;
+        std::shared_ptr<PSOLibrary> m_library;
     };
 
     DevicePtr CreateDevice(const DeviceConfig& config);

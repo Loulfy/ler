@@ -72,6 +72,9 @@ namespace ler::rhi::vulkan
                 VK_KHR_DYNAMIC_RENDERING_EXTENSION_NAME,
                 VK_EXT_MUTABLE_DESCRIPTOR_TYPE_EXTENSION_NAME,
                 VK_KHR_EXTERNAL_MEMORY_EXTENSION_NAME,
+                // pipeline library
+                VK_KHR_MAINTENANCE_5_EXTENSION_NAME,
+                VK_KHR_PIPELINE_BINARY_EXTENSION_NAME
         };
 
         // Malloc staging buffer
@@ -199,12 +202,16 @@ namespace ler::rhi::vulkan
         vulkan13Features.setDynamicRendering(true);
         vulkan13Features.setSynchronization2(true);
 
+        vk::PhysicalDevicePipelineBinaryFeaturesKHR pipelineFeature;
+        pipelineFeature.setPipelineBinaries(true);
+
         supportRayTracing = false;
         vk::StructureChain<vk::DeviceCreateInfo,
                 //vk::PhysicalDeviceRayQueryFeaturesKHR,
                 /*vk::PhysicalDeviceRayTracingPipelineFeaturesKHR,*/
                 //vk::PhysicalDeviceAccelerationStructureFeaturesKHR,
                 vk::PhysicalDeviceMutableDescriptorTypeFeaturesEXT,
+                vk::PhysicalDevicePipelineBinaryFeaturesKHR,
                 vk::PhysicalDeviceVulkan11Features,
                 vk::PhysicalDeviceVulkan12Features,
                 vk::PhysicalDeviceVulkan13Features> createInfoChain(
@@ -212,6 +219,7 @@ namespace ler::rhi::vulkan
                 //{supportRayTracing},
                 //{supportRayTracing},
                 mutableFeature,
+                pipelineFeature,
                 vulkan11Features,
                 vulkan12Features,
                 vulkan13Features);
@@ -255,6 +263,7 @@ namespace ler::rhi::vulkan
         m_threadPool = std::make_shared<coro::thread_pool>(coro::thread_pool::options{ .thread_count = 8 });
 
         m_storage = std::make_shared<Storage>(this, m_threadPool);
+        m_library = std::make_shared<PSOLibrary>(this);
     }
 
     void Buffer::uploadFromMemory(const void* src, uint32_t byteSize) const

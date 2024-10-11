@@ -44,34 +44,6 @@ std::optional<KindMapping> convertShaderStageToExtension(const ShaderType& stage
     return {};
 }
 
-void from_json(const json& j, ShaderModule& s)
-{
-    if (j.contains("path"))
-        s.path = fs::path(j["path"].get<std::string>());
-    if (j.contains("name"))
-        s.name = j["name"];
-    if (j.contains("entryPoint"))
-        s.entryPoint = j["entryPoint"];
-    if (j.contains("stage"))
-    {
-        std::string stage = j["stage"];
-        if (stage == "Vertex")
-            s.stage = ShaderType::Vertex;
-        else if (stage == "Pixel")
-            s.stage = ShaderType::Pixel;
-        else if (stage == "Compute")
-            s.stage = ShaderType::Compute;
-    }
-    if (j.contains("backend"))
-    {
-        std::string backend = j["backend"];
-        if (backend == "vulkan")
-            s.backend = GraphicsAPI::VULKAN;
-        else if (backend == "d3d12")
-            s.backend = GraphicsAPI::D3D12;
-    }
-}
-
 static EShLanguage convertShaderStageGlsl(ShaderType type)
 {
     switch (type)
