@@ -73,8 +73,8 @@ namespace ler::rhi::vulkan
                 VK_EXT_MUTABLE_DESCRIPTOR_TYPE_EXTENSION_NAME,
                 VK_KHR_EXTERNAL_MEMORY_EXTENSION_NAME,
                 // pipeline library
-                VK_KHR_MAINTENANCE_5_EXTENSION_NAME,
-                VK_KHR_PIPELINE_BINARY_EXTENSION_NAME
+                //VK_KHR_MAINTENANCE_5_EXTENSION_NAME,
+                //VK_KHR_PIPELINE_BINARY_EXTENSION_NAME
         };
 
         // Malloc staging buffer
@@ -211,7 +211,7 @@ namespace ler::rhi::vulkan
                 /*vk::PhysicalDeviceRayTracingPipelineFeaturesKHR,*/
                 //vk::PhysicalDeviceAccelerationStructureFeaturesKHR,
                 vk::PhysicalDeviceMutableDescriptorTypeFeaturesEXT,
-                vk::PhysicalDevicePipelineBinaryFeaturesKHR,
+                //vk::PhysicalDevicePipelineBinaryFeaturesKHR,
                 vk::PhysicalDeviceVulkan11Features,
                 vk::PhysicalDeviceVulkan12Features,
                 vk::PhysicalDeviceVulkan13Features> createInfoChain(
@@ -219,7 +219,7 @@ namespace ler::rhi::vulkan
                 //{supportRayTracing},
                 //{supportRayTracing},
                 mutableFeature,
-                pipelineFeature,
+                //pipelineFeature,
                 vulkan11Features,
                 vulkan12Features,
                 vulkan13Features);

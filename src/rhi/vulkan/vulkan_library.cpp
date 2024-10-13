@@ -6,23 +6,18 @@
 
 namespace ler::rhi::vulkan
 {
-rhi::PipelinePtr Device::loadPipeline(const std::string& name, const PipelineDesc& desc)
+rhi::PipelinePtr Device::loadPipeline(const std::string& name, const std::span<ShaderModule>& shaderModules, const PipelineDesc& desc)
 {
-    return nullptr;
+    // Need: MESA 24.3, Nvidia 553 ?
+    log::warn("Cache Not Supported, drivers not ready!");
+    bool compute = std::ranges::any_of(shaderModules, [](const ShaderModule& s){ return s.stage == ShaderType::Compute; });
+    if(compute)
+        return createComputePipeline(shaderModules.front());
+    else
+        return createGraphicsPipeline(shaderModules, desc);
 }
 
-PSOLibrary::~PSOLibrary()
+PSOLibrary::PSOLibrary(Device* device) : m_device(device)
 {
-
-}
-
-PSOLibrary::PSOLibrary(Device* device)
-{
-    const VulkanContext& context = device->getContext();
-
-    vk::PipelineBinaryKeyKHR globalKey;
-    vk::Result res = context.device.getPipelineKeyKHR(nullptr, &globalKey);
-
-    vk::PipelineLibraryCreateInfoKHR createInfo;
 }
 } // namespace ler::rhi::vulkan

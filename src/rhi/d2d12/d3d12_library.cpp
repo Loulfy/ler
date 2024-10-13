@@ -6,9 +6,9 @@
 
 namespace ler::rhi::d3d12
 {
-PipelinePtr Device::loadPipeline(const std::string& name, const PipelineDesc& desc)
+PipelinePtr Device::loadPipeline(const std::string& name, const std::span<ShaderModule>& shaderModules, const PipelineDesc& desc)
 {
-    return m_library->loadPipeline(name, desc);
+    return m_library->loadPipeline(name, shaderModules, desc);
 }
 
 MappedFile::~MappedFile()
@@ -205,13 +205,14 @@ void PSOLibrary::build(PsoCache& psoCache)
     psoCache.pipeline = std::move(pipeline);
 }
 
-PipelinePtr PSOLibrary::loadPipeline(const std::string& name, const PipelineDesc& desc)
+PipelinePtr PSOLibrary::loadPipeline(const std::string& name, const std::span<ShaderModule>& shaderModules, const PipelineDesc& desc)
 {
     if (!m_pipelines.contains(name))
     {
         PsoCache pso;
         pso.name = name;
         pso.desc = desc;
+        pso.modules.assign(shaderModules.begin(), shaderModules.end());
         build(pso);
         m_pipelines.insert({ name, std::move(pso) });
     }

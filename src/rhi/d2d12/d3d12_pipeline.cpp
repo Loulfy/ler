@@ -373,7 +373,7 @@ namespace ler::rhi::d3d12
         }
     }
 
-    PipelinePtr Device::createGraphicsPipeline(const std::vector<ShaderModule>& shaderModules, const PipelineDesc& desc)
+    PipelinePtr Device::createGraphicsPipeline(const std::span<ShaderModule>& shaderModules, const PipelineDesc& desc)
     {
         std::vector<ShaderPtr> shaders;
         for(const ShaderModule& shaderModule : shaderModules)

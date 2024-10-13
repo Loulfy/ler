@@ -401,7 +401,7 @@ namespace ler::rhi::vulkan
         );
     }
 
-    rhi::PipelinePtr Device::createGraphicsPipeline(const std::vector<ShaderModule>& shaderModules, const PipelineDesc& desc)
+    rhi::PipelinePtr Device::createGraphicsPipeline(const std::span<ShaderModule>& shaderModules, const PipelineDesc& desc)
     {
         std::vector<ShaderPtr> shaders;
         for(const ShaderModule& shaderModule : shaderModules)

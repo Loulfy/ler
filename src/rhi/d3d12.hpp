@@ -388,7 +388,7 @@ namespace ler::rhi::d3d12
         void destroy();
 
         void build(PsoCache& psoCache);
-        PipelinePtr loadPipeline(const std::string& name, const PipelineDesc& desc);
+        PipelinePtr loadPipeline(const std::string& name, const std::span<ShaderModule>& shaderModules, const PipelineDesc& desc);
 
       private:
 
@@ -435,10 +435,10 @@ namespace ler::rhi::d3d12
         // Pipeline
         [[nodiscard]] BindlessTablePtr createBindlessTable(uint32_t count) override;
         [[nodiscard]] ShaderPtr createShader(const ShaderModule& shaderModule) const;
-        [[nodiscard]] rhi::PipelinePtr createGraphicsPipeline(const std::vector<ShaderModule>& shaderModules, const PipelineDesc& desc) override;
+        [[nodiscard]] rhi::PipelinePtr createGraphicsPipeline(const std::span<ShaderModule>& shaderModules, const PipelineDesc& desc) override;
         [[nodiscard]] rhi::PipelinePtr createComputePipeline(const ShaderModule& shaderModule) override;
 
-        [[nodiscard]] PipelinePtr loadPipeline(const std::string& name, const PipelineDesc& desc) override;
+        [[nodiscard]] PipelinePtr loadPipeline(const std::string& name, const std::span<ShaderModule>& shaderModules, const PipelineDesc& desc) override;
 
         // Execution
         void waitIdle() override;

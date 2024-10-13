@@ -348,10 +348,10 @@ namespace ler::rhi
         void compileShader(const ShaderModule& shaderModule, const fs::path& output);
         [[nodiscard]] virtual BindlessTablePtr createBindlessTable(uint32_t count) = 0;
 
-        [[nodiscard]] virtual PipelinePtr createGraphicsPipeline(const std::vector<ShaderModule>& shaderModules, const PipelineDesc& desc) = 0;
+        [[nodiscard]] virtual PipelinePtr createGraphicsPipeline(const std::span<ShaderModule>& shaderModules, const PipelineDesc& desc) = 0;
         [[nodiscard]] virtual PipelinePtr createComputePipeline(const ShaderModule& shaderModule) = 0;
 
-        [[nodiscard]] virtual PipelinePtr loadPipeline(const std::string& name, const PipelineDesc& desc) = 0;
+        [[nodiscard]] virtual PipelinePtr loadPipeline(const std::string& name, const std::span<ShaderModule>& shaderModules, const PipelineDesc& desc) = 0;
 
         [[nodiscard]] virtual GraphicsAPI getGraphicsAPI() const = 0;
 

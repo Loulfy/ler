@@ -345,8 +345,10 @@ namespace ler::rhi::vulkan
     class PSOLibrary
     {
       public:
-        ~PSOLibrary();
         explicit PSOLibrary(Device* device);
+
+      private:
+        Device* m_device = nullptr;
     };
 
     class ImGuiPass : public IRenderPass
@@ -383,10 +385,10 @@ namespace ler::rhi::vulkan
         // Pipeline
         [[nodiscard]] BindlessTablePtr createBindlessTable(uint32_t size) override;
         [[nodiscard]] ShaderPtr createShader(const ShaderModule& shaderModule) const;
-        [[nodiscard]] rhi::PipelinePtr createGraphicsPipeline(const std::vector<ShaderModule>& shaderModules, const PipelineDesc& desc) override;
+        [[nodiscard]] rhi::PipelinePtr createGraphicsPipeline(const std::span<ShaderModule>& shaderModules, const PipelineDesc& desc) override;
         [[nodiscard]] rhi::PipelinePtr createComputePipeline(const ShaderModule& shaderModule) override;
 
-        [[nodiscard]] rhi::PipelinePtr loadPipeline(const std::string& name, const PipelineDesc& desc) override;
+        [[nodiscard]] rhi::PipelinePtr loadPipeline(const std::string& name, const std::span<ShaderModule>& shaderModules, const PipelineDesc& desc) override;
 
         // Execution
         void waitIdle() override;
