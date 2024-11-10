@@ -19,6 +19,8 @@ void RenderMeshList::installStaticScene(const rhi::DevicePtr& device,
     }
 
     rhi::BufferDesc bufDesc;
+    bufDesc.debugName = "instanceBuffer";
+    bufDesc.stride = sizeof(DrawInstance);
     bufDesc.byteSize = sizeof(DrawInstance) * m_drawInstances.size();
     m_instanceBuffer = device->createBuffer(bufDesc);
 
@@ -39,8 +41,18 @@ const DrawInstance& RenderMeshList::getInstance(uint32_t id) const
     return m_drawInstances[id];
 }
 
+const IndexedMesh& RenderMeshList::getMesh(uint32_t id) const
+{
+    return m_meshes->getMesh(id);
+}
+
 uint32_t RenderMeshList::getInstanceCount() const
 {
     return m_drawInstances.size();
+}
+
+void RenderMeshList::bindVertices(rhi::CommandPtr& cmd)
+{
+    m_meshes->bind(cmd, false);
 }
 } // namespace ler::render

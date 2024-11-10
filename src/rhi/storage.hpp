@@ -39,7 +39,7 @@ class CommonStorage : public IStorage
   private:
     virtual coro::task<> makeSingleTextureTask(coro::latch& latch, BindlessTablePtr table, ReadOnlyFilePtr file) = 0;
     virtual coro::task<> makeMultiTextureTask(coro::latch& latch, BindlessTablePtr table, std::vector<ReadOnlyFilePtr> files) = 0;
-    virtual coro::task<> makeBufferTask(coro::latch& latch, const ReadOnlyFilePtr& file, BufferPtr& buffer, uint32_t fileLength, uint32_t fileOffset) = 0;
+    virtual coro::task<> makeBufferTask(coro::latch& latch, ReadOnlyFilePtr file, BufferPtr buffer, uint32_t fileLength, uint32_t fileOffset) = 0;
 
     using task_container = coro::task_container<coro::thread_pool>;
     task_container m_scheduler;

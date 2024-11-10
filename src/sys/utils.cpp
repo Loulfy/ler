@@ -3,11 +3,12 @@
 //
 
 #include "utils.hpp"
+#include "platform.hpp"
 
 #ifdef _WIN32
 #include <ShlObj.h>
 #include <Wbemidl.h>
-#include <Windows.h>
+#include <windows.h>
 #include <comdef.h>
 #else
 #include <pwd.h>

@@ -126,6 +126,7 @@ BindlessTable::BindlessTable(const D3D12Context& context, uint32_t count) : m_co
     D3D12_DESCRIPTOR_HEAP_DESC desc = {};
     desc.Type = D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV;
     desc.NumDescriptors = count;
+    //m_context.device->CreateDescriptorHeap(&desc, IID_PPV_ARGS(&m_heapResCpu));
     desc.Flags = D3D12_DESCRIPTOR_HEAP_FLAG_SHADER_VISIBLE;
     m_context.device->CreateDescriptorHeap(&desc, IID_PPV_ARGS(&m_heapRes));
     m_descriptorSize = m_context.device->GetDescriptorHandleIncrementSize(desc.Type);
@@ -169,8 +170,7 @@ bool BindlessTable::visitBuffer(const BufferPtr& buffer, uint32_t slot)
     D3D12_CPU_DESCRIPTOR_HANDLE CPUHandle = m_heapRes->GetCPUDescriptorHandleForHeapStart();
     CPUHandle.ptr += slot * m_descriptorSize;
 
-    //TODO: reflect stride
-    uint32_t stride = 16;
+    uint32_t stride = buff->stride;
     if(buff->isCBV)
     {
         D3D12_CONSTANT_BUFFER_VIEW_DESC cbvDesc = {};
@@ -179,13 +179,13 @@ bool BindlessTable::visitBuffer(const BufferPtr& buffer, uint32_t slot)
 
         m_context.device->CreateConstantBufferView(&cbvDesc, CPUHandle);
     }
-    else if(buff->desc.Flags & D3D12_RESOURCE_FLAG_ALLOW_UNORDERED_ACCESS /*&& byteSize == 256*/)
+    else if(buff->desc.Flags & D3D12_RESOURCE_FLAG_ALLOW_UNORDERED_ACCESS)
     {
         D3D12_UNORDERED_ACCESS_VIEW_DESC uavDesc = {};
         uavDesc.ViewDimension = D3D12_UAV_DIMENSION_BUFFER;
         uavDesc.Buffer.Flags = D3D12_BUFFER_UAV_FLAG_NONE;
 
-        if(stride < UINT32_MAX)
+        if(stride > 0)
         {
             uavDesc.Buffer.StructureByteStride = stride;
             uavDesc.Buffer.NumElements = buff->sizeBytes()/stride;
@@ -196,7 +196,11 @@ bool BindlessTable::visitBuffer(const BufferPtr& buffer, uint32_t slot)
             uavDesc.Buffer.NumElements = buff->sizeBytes()/sizeof(uint32_t);
         }
 
+        //D3D12_CPU_DESCRIPTOR_HANDLE CPUOnlyHandle = m_heapResCpu->GetCPUDescriptorHandleForHeapStart();
+        //CPUOnlyHandle.ptr += slot * m_descriptorSize;
+
         m_context.device->CreateUnorderedAccessView(buff->handle, nullptr, &uavDesc, CPUHandle);
+        //m_context.device->CopyDescriptorsSimple(1, CPUHandle, CPUOnlyHandle, D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV);
     }
     else
     {

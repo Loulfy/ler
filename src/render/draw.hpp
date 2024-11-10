@@ -18,6 +18,7 @@ struct alignas(16) Frustum
 {
     glm::vec4 planes[6];
     glm::vec4 corners[8];
+    glm::uint num;
 };
 
 struct alignas(16) DrawMesh

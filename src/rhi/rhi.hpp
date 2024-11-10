@@ -90,10 +90,12 @@ namespace ler::rhi
     {
         uint32_t byteSize = 0;
         uint32_t alignment = 0;
+        uint32_t stride = 0;
         std::string debugName;
 
         bool isUAV = false;
         bool isStaging = false;
+        bool isReadBack = false;
         bool isVertexBuffer = false;
         bool isIndexBuffer = false;
         bool isConstantBuffer = false;
@@ -106,6 +108,7 @@ namespace ler::rhi
         [[nodiscard]] virtual uint32_t sizeBytes() const = 0;
         [[nodiscard]] virtual bool staging() const = 0;
         virtual void uploadFromMemory(const void* src, uint32_t byteSize) const = 0;
+        virtual void getUint(uint32_t* ptr) const = 0;
     };
 
     using BufferPtr = std::shared_ptr<IBuffer>;
@@ -181,6 +184,7 @@ namespace ler::rhi
       public:
         virtual ~IBindlessTable() = default;
         virtual uint32_t allocate() = 0;
+        virtual uint32_t appendResource(const ResourcePtr& res) = 0;
         virtual bool setResource(const ResourcePtr& res, uint32_t slot) = 0;
         virtual void setSampler(const SamplerPtr& sampler, uint32_t slot) = 0;
         [[nodiscard]] virtual TexturePtr getTexture(uint32_t slot) const = 0;
@@ -254,7 +258,7 @@ namespace ler::rhi
         virtual void reset() = 0;
         virtual void bindPipeline(const PipelinePtr& pipeline, uint32_t descriptorHandle) const = 0;
         virtual void bindPipeline(const PipelinePtr& pipeline, const BindlessTablePtr& table) const = 0;
-        virtual void pushConstant(const PipelinePtr& pipeline, const void* data, uint8_t size) const = 0;
+        virtual void pushConstant(const PipelinePtr& pipeline, ShaderType stage, const void* data, uint8_t size) const = 0;
         virtual void drawIndexed(uint32_t vertexCount) const = 0;
         virtual void drawIndexedInstanced(uint32_t indexCount, uint32_t firstIndex, int32_t firstVertex, uint32_t firstId) const = 0;
         virtual void drawIndirectIndexed(const PipelinePtr& pipeline, const BufferPtr& commands, const BufferPtr& count, uint32_t maxDrawCount, uint32_t stride) const = 0;

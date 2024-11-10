@@ -13,7 +13,7 @@ namespace ler::rhi::vulkan
 {
     static const std::array<std::set<std::string>, 5> c_VertexAttrMap =
     {{
-         {"inPos", "in.var.POSITION0"},
+         {"inPos", "in.var.POSITION"},
          {"inTex", "inUV", "in.var.TEXCOORD0"},
          {"inNormal", "in.var.NORMAL0"},
          {"inTangent", "in.var.TANGENT0"},

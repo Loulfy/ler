@@ -107,6 +107,10 @@ namespace ler::rhi::d3d12
         bool supportRayTracing = options.RaytracingTier == D3D12_RAYTRACING_TIER_1_1;
         log::info("Support Ray Tracing: {}", supportRayTracing);
 
+        D3D12_FEATURE_DATA_D3D12_OPTIONS1 features1 = {};
+        m_device->CheckFeatureSupport( D3D12_FEATURE_D3D12_OPTIONS1, &features1, sizeof(features1));
+        log::info("SubgroupSize: {}", features1.WaveLaneCountMax);
+
         D3D12MA::ALLOCATOR_DESC allocatorDesc = {};
         allocatorDesc.pDevice = m_device.Get();
         allocatorDesc.pAdapter = m_adapter.Get();
@@ -142,6 +146,19 @@ namespace ler::rhi::d3d12
         if (staging() && sizeBytes() >= byteSize && SUCCEEDED(handle->Map(0, nullptr, &pMappedData)))
         {
             memcpy(pMappedData, src, byteSize);
+            handle->Unmap(0, nullptr);
+        }
+        else
+            log::error("Failed to upload to buffer");
+    }
+
+    void Buffer::getUint(uint32_t* ptr) const
+    {
+        void* pMappedData;
+        if (staging() && SUCCEEDED(handle->Map(0, nullptr, &pMappedData)))
+        {
+            auto data = (uint32_t*) pMappedData;
+            *ptr = *data;
             handle->Unmap(0, nullptr);
         }
         else
@@ -198,17 +215,39 @@ namespace ler::rhi::d3d12
         buffer->desc.SampleDesc.Quality = 0;
         buffer->desc.Layout = D3D12_TEXTURE_LAYOUT_ROW_MAJOR;
         buffer->desc.Flags = D3D12_RESOURCE_FLAG_NONE;
+        buffer->stride = desc.stride;
         buffer->state = Common;
         if(desc.isUAV)
         {
             buffer->desc.Flags |= D3D12_RESOURCE_FLAG_ALLOW_UNORDERED_ACCESS;
             buffer->clearCpuHandle = m_context.descriptorPoolCpuOnly->allocate(1);
             buffer->clearGpuHandle = m_context.descriptorPool[D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV]->allocate(1);
+
+            D3D12_UNORDERED_ACCESS_VIEW_DESC uavDesc = {};
+            uavDesc.ViewDimension = D3D12_UAV_DIMENSION_BUFFER;
+            uavDesc.Buffer.Flags = D3D12_BUFFER_UAV_FLAG_NONE;
+
+            if(desc.stride > 0)
+            {
+                uavDesc.Buffer.StructureByteStride = desc.stride;
+                uavDesc.Buffer.NumElements = desc.byteSize/desc.stride;
+            }
+            else
+            {
+                uavDesc.Format = DXGI_FORMAT_R32_UINT;
+                uavDesc.Buffer.NumElements = desc.byteSize/sizeof(uint32_t);
+            }
+
+            D3D12_CPU_DESCRIPTOR_HANDLE cpuHandle = buffer->clearGpuHandle.getCpuHandle();
+            D3D12_CPU_DESCRIPTOR_HANDLE cpuOnlyHandle = buffer->clearCpuHandle.getCpuHandle();
+            m_context.device->CreateUnorderedAccessView(buffer->handle, nullptr, &uavDesc, cpuOnlyHandle);
+            m_context.device->CopyDescriptorsSimple(1, cpuHandle, cpuOnlyHandle, D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV);
         }
         if(desc.isConstantBuffer)
             buffer->desc.Width = align(desc.byteSize, 256u); // CB size is required to be 256-byte aligned.
 
         buffer->allocDesc.HeapType = desc.isStaging ? D3D12_HEAP_TYPE_UPLOAD : D3D12_HEAP_TYPE_DEFAULT;
+        buffer->allocDesc.HeapType = desc.isReadBack ? D3D12_HEAP_TYPE_READBACK : buffer->allocDesc.HeapType;
 
         HRESULT hr = m_allocator->CreateResource(
                 &buffer->allocDesc,
@@ -223,6 +262,8 @@ namespace ler::rhi::d3d12
         else
             buffer->handle = buffer->allocation->GetResource();
 
+        std::wstring name = sys::toUtf16(desc.debugName);
+        buffer->handle->SetName(name.c_str());
         return buffer;
     }
 

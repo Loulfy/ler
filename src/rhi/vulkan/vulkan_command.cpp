@@ -473,11 +473,27 @@ namespace ler::rhi::vulkan
         cmdBuf.bindDescriptorSets(native->bindPoint, native->pipelineLayout.get(), 0, bindless->m_descriptor, nullptr);
     }
 
-    void Command::pushConstant(const rhi::PipelinePtr& pipeline, const void* data, uint8_t size) const
+    static vk::ShaderStageFlags convertShaderStage(ShaderType stage)
     {
-        assert(size < 128);
+        switch(stage)
+        {
+        case ShaderType::Pixel:
+            return vk::ShaderStageFlagBits::eFragment;
+        case ShaderType::Vertex:
+            return vk::ShaderStageFlagBits::eVertex;
+        case ShaderType::Compute:
+            return vk::ShaderStageFlagBits::eCompute;
+        default:
+            log::exit("ShaderStage not implemented");
+            return {};
+        }
+    }
+
+    void Command::pushConstant(const rhi::PipelinePtr& pipeline, ShaderType stage, const void* data, uint8_t size) const
+    {
+        assert(size <= 128);
         auto* native = checked_cast<BasePipeline*>(pipeline.get());
-        cmdBuf.pushConstants(native->pipelineLayout.get(), vk::ShaderStageFlagBits::eFragment, 0, size, data);
+        cmdBuf.pushConstants(native->pipelineLayout.get(), convertShaderStage(stage), 0, size, data);
     }
 
     void Command::beginRendering(const RenderingInfo& renderingInfo) const

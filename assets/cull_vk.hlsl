@@ -30,7 +30,7 @@ struct Command
 
 [[vk::binding(0)]] StructuredBuffer<Instance> props : register(t0);
 [[vk::binding(1)]] StructuredBuffer<Mesh> meshes : register(t1);
-[[vk::binding(2)]] RWStructuredBuffer<Command> draws : register(u0);
+[[vk::binding(2)]] AppendStructuredBuffer<Command> draws : register(u0);
 [[vk::binding(3)]] RWStructuredBuffer<uint> drawCount : register(u1);
 
 [numthreads(64, 1, 1)]
@@ -49,6 +49,7 @@ void CSMain(uint3 DTid : SV_DispatchThreadID, uint3 GTid : SV_GroupThreadID)
     drawCommand.baseVertex = mesh.firstVertex;
     drawCommand.drawId = drawId;
 
-    draws[drawId] = drawCommand;
+    //draws[drawId] = drawCommand;
+    draws.Append(drawCommand);
     InterlockedAdd(drawCount[0], 1);
 }

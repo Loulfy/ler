@@ -274,6 +274,17 @@ namespace ler::rhi::vulkan
             log::error("Failed to upload to buffer");
     }
 
+    void Buffer::getUint(uint32_t* ptr) const
+    {
+        if (staging())
+        {
+            auto data = (uint32_t*) hostInfo.pMappedData;
+            *ptr = *data;
+        }
+        else
+            log::error("Failed to upload to buffer");
+    }
+
     static void aligned_free(void* pMemory)
     {
         #ifdef _WIN32

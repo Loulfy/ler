@@ -134,11 +134,13 @@ namespace ler::rhi::d3d12
         DescriptorHeapAllocation clearCpuHandle;
         DescriptorHeapAllocation clearGpuHandle;
         bool isCBV = false;
+        uint32_t stride = 0;
 
         ~Buffer() override { allocation->Release(); }
         [[nodiscard]] uint32_t sizeBytes() const override { return desc.Width; }
         [[nodiscard]] bool staging() const override { return allocDesc.HeapType & D3D12_HEAP_TYPE_UPLOAD; }
         void uploadFromMemory(const void* src, uint32_t byteSize) const override;
+        void getUint(uint32_t* ptr) const override;
     };
 
     struct Texture : public ITexture
@@ -195,6 +197,7 @@ namespace ler::rhi::d3d12
         const D3D12Context& m_context;
         uint32_t m_descriptorSize = 0;
         ComPtr<ID3D12DescriptorHeap> m_heapRes;
+        ComPtr<ID3D12DescriptorHeap> m_heapResCpu;
         ComPtr<ID3D12DescriptorHeap> m_heapSamp;
 
         bool visitTexture(const TexturePtr& texture, uint32_t slot) override;
@@ -250,11 +253,12 @@ namespace ler::rhi::d3d12
 
         ComPtr<ID3D12GraphicsCommandList> m_commandList;
         ComPtr<ID3D12CommandAllocator> m_commandAllocator;
+        DescriptorHeapAllocator* m_gpuHeap = nullptr;
 
         void reset() override;
         void bindPipeline(const PipelinePtr& pipeline, uint32_t descriptorHandle) const override;
         void bindPipeline(const PipelinePtr& pipeline, const BindlessTablePtr& table) const override;
-        void pushConstant(const PipelinePtr& pipeline, const void* data, uint8_t size) const override;
+        void pushConstant(const PipelinePtr& pipeline, ShaderType stage, const void* data, uint8_t size) const override;
         void drawIndexed(uint32_t vertexCount) const override;
         void drawIndexedInstanced(uint32_t indexCount, uint32_t firstIndex, int32_t firstVertex, uint32_t firstId) const override;
         void drawIndirectIndexed(const rhi::PipelinePtr& pipeline, const BufferPtr& commands, const BufferPtr& count, uint32_t maxDrawCount, uint32_t stride) const override;
@@ -357,7 +361,7 @@ namespace ler::rhi::d3d12
         void submitWait();
         coro::task<> makeSingleTextureTask(coro::latch& latch, BindlessTablePtr table, ReadOnlyFilePtr file) override;
         coro::task<> makeMultiTextureTask(coro::latch& latch, BindlessTablePtr table, std::vector<ReadOnlyFilePtr> files) override;
-        coro::task<> makeBufferTask(coro::latch& latch, const ReadOnlyFilePtr& file, BufferPtr& buffer, uint32_t fileLength, uint32_t fileOffset) override;
+        coro::task<> makeBufferTask(coro::latch& latch, ReadOnlyFilePtr file, BufferPtr buffer, uint32_t fileLength, uint32_t fileOffset) override;
     };
 
     class MappedFile

@@ -62,6 +62,7 @@ namespace ler::rhi::d3d12
             auto command = std::make_shared<Command>();
 
             // Command
+            command->m_gpuHeap = m_context.descriptorPool[D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV].get();
             m_context.device->CreateCommandAllocator(D3D12_COMMAND_LIST_TYPE_DIRECT, IID_PPV_ARGS(&command->m_commandAllocator));
             m_context.device->CreateCommandList(0, D3D12_COMMAND_LIST_TYPE_DIRECT, command->m_commandAllocator.Get(),
                                                 nullptr, IID_PPV_ARGS(&command->m_commandList));

@@ -84,8 +84,12 @@
   }, {
     "name" : "imgui",
     "version>=" : "1.91.0",
-    "features" : [ "glfw-binding", "vulkan-binding", {"name": "dx12-binding",
-      "platform": "windows"
+    "features" : [ "glfw-binding", "vulkan-binding", {
+      "name" : "dx12-binding",
+      "platform" : "windows"
     } ]
+  }, {
+    "name" : "imgui-node-editor",
+    "version>=" : "0.9.3#1"
   } ]
 }

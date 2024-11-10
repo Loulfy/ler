@@ -144,7 +144,7 @@ coro::task<> Storage::makeMultiTextureTask(coro::latch& latch, BindlessTablePtr 
     for (int i = 0; i < files.size(); ++i)
     {
         queueTexture(files[i], requests[i]);
-        const uint32_t byteSizes = files[i]->sizeBytes();//, 16u);
+        const uint32_t byteSizes = files[i]->sizeBytes(); //, 16u);
 
         if (offset + byteSizes > capacity)
         {
@@ -208,8 +208,8 @@ coro::task<> Storage::makeMultiTextureTask(coro::latch& latch, BindlessTablePtr 
     co_return;
 }
 
-coro::task<> Storage::makeBufferTask(coro::latch& latch, const ReadOnlyFilePtr& file, BufferPtr& buffer,
-                                     uint32_t fileLength, uint32_t fileOffset)
+coro::task<> Storage::makeBufferTask(coro::latch& latch, ReadOnlyFilePtr file, BufferPtr buffer, uint32_t fileLength,
+                                     uint32_t fileOffset)
 {
     auto* f = checked_cast<ReadOnlyFile*>(file.get());
 

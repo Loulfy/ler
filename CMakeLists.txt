@@ -4,6 +4,7 @@ project(gdev)
 set(CMAKE_CXX_STANDARD 23)
 
 find_package(Vulkan)
+find_package(unofficial-imgui-node-editor CONFIG REQUIRED)
 find_package(unofficial-spirv-reflect CONFIG REQUIRED)
 find_package(VulkanMemoryAllocator CONFIG REQUIRED)
 find_package(meshoptimizer CONFIG REQUIRED)
@@ -30,6 +31,7 @@ set(SRC
     "src/rhi/ref.hpp"
     "src/rhi/rhi.hpp"
     "src/rhi/format.cpp"
+    "src/sys/platform.hpp"
     "src/sys/utils.hpp"
     "src/sys/utils.cpp"
     "src/sys/ioring.hpp"
@@ -55,8 +57,6 @@ set(SRC
     "src/rhi/bindless.cpp"
     "src/rhi/storage.hpp"
     "src/rhi/storage.cpp"
-    "src/rhi/library.hpp"
-    "src/rhi/library.cpp"
     "src/app/desktop.hpp"
     "src/app/desktop.cpp"
     "src/rhi/shader/compiler.cpp"
@@ -84,6 +84,7 @@ set(SRC
     "src/scene/scene.cpp"
     "src/pass/forward_indexed.hpp"
     "src/pass/culling_command.hpp"
+    "src/pass/deferred_scene.hpp"
 )
 
 set(SRC_PACKER
@@ -122,7 +123,7 @@ endif()
 
 flatbuffers_generate_headers(TARGET generated_cppmessages SCHEMAS "res/scene.fbs" FLAGS ${FLATC_CPP_FLAGS})
 
-add_executable(gdev main.cpp ${SRC} ${WIN32_RESOURCES} ${PROTO_SRCS} ${PROTO_HDRS})
+add_executable(gdev main.cpp editor.hpp ${SRC} ${WIN32_RESOURCES} ${PROTO_SRCS} ${PROTO_HDRS})
 target_link_libraries(gdev PRIVATE PkgConfig::Coro)
 target_link_libraries(gdev PRIVATE spdlog::spdlog)
 target_link_libraries(gdev PRIVATE assimp::assimp)
@@ -136,6 +137,7 @@ target_link_libraries(gdev PRIVATE generated_cppmessages)
 target_link_libraries(gdev PRIVATE flatbuffers::flatbuffers)
 target_link_libraries(gdev PRIVATE nlohmann_json::nlohmann_json)
 target_link_libraries(gdev PRIVATE meshoptimizer::meshoptimizer)
+target_link_libraries(gdev PRIVATE unofficial::imgui-node-editor::imgui-node-editor)
 target_link_libraries(gdev PRIVATE imgui::imgui)
 target_link_libraries(gdev PRIVATE xxHash::xxhash)
 target_link_libraries(gdev PRIVATE glfw)

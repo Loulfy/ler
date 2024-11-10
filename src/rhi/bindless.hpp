@@ -12,6 +12,7 @@ class CommonBindlessTable : public IBindlessTable
 {
   public:
     uint32_t allocate() override;
+    uint32_t appendResource(const ResourcePtr& res) override;
     bool setResource(const ResourcePtr& res, uint32_t slot) override;
     [[nodiscard]] TexturePtr getTexture(uint32_t slot) const override;
     [[nodiscard]] BufferPtr getBuffer(uint32_t slot) const override;

@@ -68,5 +68,33 @@
     "entryPoint": "CSMain",
     "stage": "Compute",
     "backend": "vulkan"
-  }
+  },
+  {
+      "name": "wireframe",
+      "path": "wireframe_dx.hlsl",
+      "entryPoint": "PSMain",
+      "stage": "Pixel",
+      "backend": "d3d12"
+  },
+  {
+      "name": "wireframe",
+      "path": "wireframe_dx.hlsl",
+      "entryPoint": "VSMain",
+      "stage": "Vertex",
+      "backend": "d3d12"
+  },
+  {
+        "name": "wireframe",
+        "path": "wireframe_vk.hlsl",
+        "entryPoint": "PSMain",
+        "stage": "Pixel",
+        "backend": "vulkan"
+    },
+    {
+        "name": "wireframe",
+        "path": "wireframe_vk.hlsl",
+        "entryPoint": "VSMain",
+        "stage": "Vertex",
+        "backend": "vulkan"
+    }
 ]

@@ -29,6 +29,13 @@ bool CommonBindlessTable::setResource(const ResourcePtr& res, uint32_t slot)
     return false;
 }
 
+uint32_t CommonBindlessTable::appendResource(const ResourcePtr& res)
+{
+    uint32_t slot = allocate();
+    setResource(res, slot);
+    return slot;
+}
+
 TexturePtr CommonBindlessTable::getTexture(uint32_t slot) const
 {
     const ResourcePtr& res = m_resources[slot];

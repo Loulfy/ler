@@ -1,14 +1,11 @@
 //
-// Created by loulfy on 07/01/2024.
-//
-
-#include "ioring.hpp"
+// Created by loulfy on "ioring.hpp"
 
 #include <cstring>
 
 namespace ler::sys
 {
-#ifdef _WIN32
+#ifdef PLATFORM_WIN
 static std::string getErrorMsg(HRESULT hr)
 {
     LPSTR messageBuffer = nullptr;
@@ -68,7 +65,7 @@ void IoService::registerBuffers(std::vector<BufferInfo>& buffers, bool enabled)
         m_buffers.emplace_back(b.address, b.length);
     if(enabled)
     {
-#ifdef _WIN32
+#ifdef PLATFORM_WIN
         const int res = BuildIoRingRegisterBuffers(m_ring, m_buffers.size(), m_buffers.data(), 0);
 #else
         const int res = io_uring_register_buffers(&m_ring, m_buffers.data(), m_buffers.size());

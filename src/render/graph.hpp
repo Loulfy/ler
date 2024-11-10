@@ -4,11 +4,11 @@
 
 #pragma once
 
-#include "mesh_list.hpp"
+#include "pass.hpp"
 
 namespace ler::render
 {
-constexpr static char RT_BackBuffer[] = "backBuffer";
+/*constexpr static char RT_BackBuffer[] = "backBuffer";
 
 enum RenderResType
 {
@@ -50,6 +50,7 @@ struct RenderDesc
     uint32_t handle = UINT32_MAX;
     RenderResType type = RR_ReadOnlyBuffer;
     uint32_t binding = UINT32_MAX;
+    uint32_t bindlessIndex = UINT32_MAX;
 
     rhi::BufferDesc buffer;
     rhi::TextureDesc texture;
@@ -84,7 +85,7 @@ class RenderGraphPass
     virtual ~RenderGraphPass() = default;
     virtual void create(const rhi::DevicePtr& device, RenderGraph& graph, std::span<RenderDesc> resources) = 0;
     virtual void resize(const rhi::DevicePtr& device, const rhi::Extent& viewport) {};
-    virtual void render(rhi::CommandPtr& cmd, RenderMeshList& scene, RenderParams params) = 0;
+    virtual void render(rhi::CommandPtr& cmd, RenderParams params) = 0;
     [[nodiscard]] virtual rhi::PipelinePtr getPipeline() const = 0;
     [[nodiscard]] virtual std::string getName() const = 0;
     virtual void getResourceDesc(RenderDesc& desc) = 0;
@@ -103,13 +104,13 @@ struct RenderGraphNode
     std::vector<RenderGraphNode*> edges;
 };
 
-class RenderGraph : public rhi::IRenderPass
+class RenderGraph : public rhi::IRenderPass, public render::IMeshRenderer
 {
   public:
     void parse(const fs::path& path);
     void compile(const rhi::DevicePtr& device);
     void resize(const rhi::DevicePtr& device, const rhi::Extent& viewport) override;
-    void execute(rhi::CommandPtr& cmd, rhi::TexturePtr& backBuffer, RenderMeshList& scene, const RenderParams& params);
+    void execute(rhi::CommandPtr& cmd, rhi::TexturePtr& backBuffer, const RenderParams& params);
     void rebind();
 
     void addResource(const std::string& name, const RenderResource& res);
@@ -130,6 +131,7 @@ class RenderGraph : public rhi::IRenderPass
 
     void create(const rhi::DevicePtr& device, const rhi::SwapChainPtr& swapChain) override;
     void render(rhi::TexturePtr& backBuffer, rhi::CommandPtr& command) override;
+    void render(rhi::TexturePtr& backBuffer, rhi::CommandPtr& command, const RenderParams& params) override;
 
   private:
     RenderGraphInfo m_info;
@@ -137,15 +139,105 @@ class RenderGraph : public rhi::IRenderPass
     std::vector<RenderResource> m_resourceCache;
     std::unordered_map<std::string, uint32_t> m_resourceMap;
 
+    rhi::BindlessTablePtr m_table;
     rhi::SamplerPtr samplerGlobal;
 
     void setRenderAttachment(const RenderDesc& desc, rhi::Attachment& info);
     static bool guessOutput(const RenderDesc& res);
     static rhi::ResourceState guessState(const RenderDesc& res);
     void applyBarrier(rhi::CommandPtr& cmd, const RenderDesc& desc, rhi::ResourceState state);
-    void bindResource(const rhi::PipelinePtr& pipeline, const RenderDesc& res, uint32_t descriptor);
+    void bindResource(const rhi::PipelinePtr& pipeline, RenderDesc& res);
+    void computeEdges(RenderGraphNode& node);
+    void topologicalSort();
+};*/
+
+/*enum RenderResType
+{
+    RR_Buffer = 0,
+    RR_Texture,
+    RR_Raytracing,
+};*/
+
+enum RenderResType
+{
+    RR_ReadOnlyBuffer = 0,
+    RR_ConstantBuffer,
+    RR_SampledTexture,
+    RR_StorageBuffer,
+    RR_StorageImage,
+    RR_RenderTarget,
+    RR_DepthWrite,
+    RR_Raytracing,
+};
+
+enum RenderPassType
+{
+    RP_Graphics,
+    RP_Compute,
+    RP_RayTracing
+};
+
+using RenderResource = std::variant<std::monostate, rhi::BufferPtr, rhi::TexturePtr>;
+
+struct RenderNode
+{
+    std::string name;
+    RenderResType type = RR_StorageBuffer;
+    uint32_t bindlessIndex = UINT32_MAX;
+    RenderResource resource;
+    uint32_t linkGroup = UINT32_MAX;
+};
+
+struct RenderGraphTable
+{
+    std::vector<RenderNode> inputs;
+    std::vector<RenderNode> outputs;
+};
+
+rhi::BufferPtr getBufferOutput(const RenderGraphTable& res, uint32_t id);
+
+class RenderGraphPass
+{
+  public:
+    virtual ~RenderGraphPass() = default;
+    virtual void create(const rhi::DevicePtr& device) = 0;
+    virtual void resize(const rhi::DevicePtr& device, const rhi::Extent& viewport) {};
+    virtual void render(rhi::CommandPtr& cmd, const RenderParams& params, RenderGraphTable& res) = 0;
+    [[nodiscard]] virtual rhi::PipelinePtr getPipeline() const = 0;
+    [[nodiscard]] virtual std::string getName() const = 0;
+    virtual void createRenderResource(const rhi::DevicePtr& device, const RenderParams& params, RenderGraphTable& res) = 0;
+};
+
+struct RenderGraphNode
+{
+    size_t index = 0;
+    std::string name;
+    rhi::RenderingInfo rendering;
+    RenderPassType type = RP_Graphics;
+    RenderGraphTable resources;
+    std::unique_ptr<RenderGraphPass> pass;
+    std::vector<RenderGraphNode*> edges;
+};
+
+class RenderGraph : public rhi::IRenderPass, public render::IMeshRenderer
+{
+  public:
+
+    void create(const rhi::DevicePtr& device, const rhi::SwapChainPtr& swapChain) override;
+    void render(rhi::TexturePtr& backBuffer, rhi::CommandPtr& command) override;
+    void render(rhi::TexturePtr& backBuffer, rhi::CommandPtr& command, const RenderParams& params) override;
+
+  private:
+
+    std::vector<RenderGraphNode> m_nodes;
+    rhi::BindlessTablePtr m_table;
+
+    static rhi::ResourceState guessState(const RenderNode& res);
+    static void applyBarrier(rhi::CommandPtr& cmd, const RenderNode& desc, rhi::ResourceState state);
+
     void computeEdges(RenderGraphNode& node);
     void topologicalSort();
 };
+
 using RenderGraphPtr = std::shared_ptr<render::RenderGraph>;
 } // namespace ler::render

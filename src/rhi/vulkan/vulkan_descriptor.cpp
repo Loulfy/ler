@@ -185,6 +185,24 @@ bool BindlessTable::visitTexture(const TexturePtr& texture, uint32_t slot)
 
 bool BindlessTable::visitBuffer(const BufferPtr& buffer, uint32_t slot)
 {
+    auto* buff = checked_cast<Buffer*>(buffer.get());
+
+    auto type = vk::DescriptorType::eStorageBuffer;
+
+    vk::DescriptorBufferInfo bufferInfo;
+    bufferInfo.setBuffer(buff->handle);
+    bufferInfo.setRange(VK_WHOLE_SIZE);
+    bufferInfo.setOffset(0);
+
+    vk::WriteDescriptorSet descriptorWriteInfo;
+    descriptorWriteInfo.setDescriptorType(type);
+    descriptorWriteInfo.setDstBinding(0);
+    descriptorWriteInfo.setDescriptorCount(1);
+    descriptorWriteInfo.setDstSet(m_descriptor);
+    descriptorWriteInfo.setDstArrayElement(slot);
+    descriptorWriteInfo.setBufferInfo(bufferInfo);
+
+    m_context.device.updateDescriptorSets(descriptorWriteInfo, nullptr);
     return true;
 }
 

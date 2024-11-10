@@ -76,6 +76,7 @@ namespace ler::rhi::vulkan
         [[nodiscard]] uint32_t sizeBytes() const override { return info.size; }
         [[nodiscard]] bool staging() const override { return allocInfo.flags & VMA_ALLOCATION_CREATE_HOST_ACCESS_SEQUENTIAL_WRITE_BIT; }
         void uploadFromMemory(const void* src, uint32_t byteSize) const override;
+        void getUint(uint32_t* ptr) const override;
 
     private:
 
@@ -230,7 +231,7 @@ namespace ler::rhi::vulkan
         void reset() override;
         void bindPipeline(const rhi::PipelinePtr& pipeline, uint32_t descriptorHandle) const override;
         void bindPipeline(const rhi::PipelinePtr& pipeline, const BindlessTablePtr& table) const override;
-        void pushConstant(const rhi::PipelinePtr& pipeline, const void* data, uint8_t size) const override;
+        void pushConstant(const rhi::PipelinePtr& pipeline, ShaderType stage, const void* data, uint8_t size) const override;
         void drawIndexed(uint32_t vertexCount) const override;
         void drawIndexedInstanced(uint32_t indexCount, uint32_t firstIndex, int32_t firstVertex, uint32_t firstId) const override;
         void drawIndirectIndexed(const rhi::PipelinePtr& pipeline, const BufferPtr& commands, const BufferPtr& count, uint32_t maxDrawCount, uint32_t stride) const override;
@@ -339,7 +340,7 @@ namespace ler::rhi::vulkan
 
         coro::task<> makeSingleTextureTask(coro::latch& latch, BindlessTablePtr table, ReadOnlyFilePtr file) override;
         coro::task<> makeMultiTextureTask(coro::latch& latch, BindlessTablePtr table, std::vector<ReadOnlyFilePtr> files) override;
-        coro::task<> makeBufferTask(coro::latch& latch, const ReadOnlyFilePtr& file, BufferPtr& buffer, uint32_t fileLength, uint32_t fileOffset) override;
+        coro::task<> makeBufferTask(coro::latch& latch, ReadOnlyFilePtr file, BufferPtr buffer, uint32_t fileLength, uint32_t fileOffset) override;
     };
 
     class PSOLibrary

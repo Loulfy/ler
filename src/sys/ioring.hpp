@@ -4,7 +4,9 @@
 
 #pragma once
 
-#ifdef _WIN32
+#include "platform.hpp"
+
+#ifdef PLATFORM_WIN
 #define NOMINMAX
 #define WIN32_NO_STATUS
 #include <ntstatus.h>
@@ -67,7 +69,7 @@ class IoService
     Awaiter submit(std::vector<FileLoadRequest>& request);
 
     void registerBuffers(std::vector<BufferInfo>& buffers, bool enabled);
-#ifdef _WIN32
+#ifdef PLATFORM_WIN
     std::byte* getMemPtr(int id) const { return static_cast<std::byte*>(m_buffers[id].Address); }
 #else
     std::byte* getMemPtr(int id) const { return static_cast<std::byte*>(m_buffers[id].iov_base); }

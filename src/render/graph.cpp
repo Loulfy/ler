@@ -7,6 +7,7 @@
 
 namespace ler::render
 {
+/*
 void to_json(json& j, const RenderDesc& r)
 {
 }
@@ -84,6 +85,7 @@ void RenderGraph::compile(const rhi::DevicePtr& device)
     samplerGlobal = device->createSampler(
         { true, rhi::SamplerAddressMode::Repeat, rhi::SamplerAddressMode::Repeat, rhi::SamplerAddressMode::Repeat });
     // samplerGlobal = device->createSampler({true});
+    m_table = device->createBindlessTable(128);
 
     for (RenderGraphNode& node : m_nodes)
     {
@@ -105,13 +107,16 @@ void RenderGraph::compile(const rhi::DevicePtr& device)
             }
         }
 
+        for (RenderDesc& res : node.bindings)
+            bindResource(nullptr, res);
+
         node.pass->create(device, *this, node.bindings);
         rhi::PipelinePtr pipeline = node.pass->getPipeline();
         if (pipeline == nullptr)
             continue;
-        pipeline->createDescriptorSet(0);
-        for (RenderDesc& res : node.bindings)
-            bindResource(pipeline, res, node.descriptor);
+        //pipeline->createDescriptorSet(0);
+        //for (RenderDesc& res : node.bindings)
+            //bindResource(pipeline, res);
     }
 }
 
@@ -166,14 +171,13 @@ void RenderGraph::resize(const rhi::DevicePtr& device, const rhi::Extent& viewpo
                 break;
             }
 
-            if (pipeline)
-                bindResource(pipeline, desc, node.descriptor);
+            //if (pipeline)
+                //bindResource(pipeline, desc);
         }
     }
 }
 
-void RenderGraph::execute(rhi::CommandPtr& cmd, rhi::TexturePtr& backBuffer, RenderMeshList& scene,
-                          const RenderParams& params)
+void RenderGraph::execute(rhi::CommandPtr& cmd, rhi::TexturePtr& backBuffer, const RenderParams& params)
 {
     for (size_t i = 0; i < m_nodes.size(); ++i)
     {
@@ -202,8 +206,8 @@ void RenderGraph::execute(rhi::CommandPtr& cmd, rhi::TexturePtr& backBuffer, Ren
         if (node.pass)
         {
             if (node.pass->getPipeline())
-                cmd->bindPipeline(node.pass->getPipeline(), node.descriptor);
-            node.pass->render(cmd, scene, params);
+                cmd->bindPipeline(node.pass->getPipeline(), m_table);
+            node.pass->render(cmd, params);
         }
 
         // End Pass
@@ -218,7 +222,7 @@ void RenderGraph::rebind()
     if (m_nodes.empty())
         return;
     auto& node = m_nodes.back();
-    bindResource(node.pass->getPipeline(), node.bindings[5], node.descriptor);
+    bindResource(node.pass->getPipeline(), node.bindings[5]);
 }
 
 void RenderGraph::addResource(const std::string& name, const RenderResource& res)
@@ -262,7 +266,7 @@ void RenderGraph::applyBarrier(rhi::CommandPtr& cmd, const RenderDesc& desc, rhi
     }
 }
 
-void RenderGraph::bindResource(const rhi::PipelinePtr& pipeline, const RenderDesc& res, uint32_t descriptor)
+void RenderGraph::bindResource(const rhi::PipelinePtr& pipeline, RenderDesc& res)
 {
     if (res.handle == UINT32_MAX || res.binding == UINT32_MAX)
         return;
@@ -271,16 +275,14 @@ void RenderGraph::bindResource(const rhi::PipelinePtr& pipeline, const RenderDes
     if (std::holds_alternative<rhi::BufferPtr>(r))
     {
         auto& buf = std::get<rhi::BufferPtr>(r);
-        if (res.type == RR_ReadOnlyBuffer)
-            pipeline->updateStorage(descriptor, res.binding, buf, 0);
-        else
-            pipeline->updateStorage(descriptor, res.binding, buf, 256);
+        res.bindlessIndex = m_table->allocate();
+        m_table->setResource(buf, res.bindlessIndex);
     }
-    else if (std::holds_alternative<rhi::BindlessTablePtr>(r))
+    else if (std::holds_alternative<rhi::TexturePtr>(r))
     {
-        auto& pool = std::get<rhi::BindlessTablePtr>(r);
-        //if (pool->getTextureCount() > 1)
-          //  pipeline->updateSampler(descriptor, res.binding, samplerGlobal, pool->getTextures());
+        auto& tex = std::get<rhi::TexturePtr>(r);
+        res.bindlessIndex = m_table->allocate();
+        m_table->setResource(tex, res.bindlessIndex);
     }
 }
 
@@ -391,12 +393,195 @@ void RenderGraph::topologicalSort()
     // Reverse
     std::reverse(m_nodes.begin(), m_nodes.end());
 }
+
 void RenderGraph::create(const rhi::DevicePtr& device, const rhi::SwapChainPtr& swapChain)
 {
     compile(device);
 }
+
 void RenderGraph::render(rhi::TexturePtr& backBuffer, rhi::CommandPtr& command)
 {
-    //execute(command, backBuffer, m_meshList, params);
+    // execute(command, backBuffer, m_meshList, params);
+}
+
+void RenderGraph::render(rhi::TexturePtr& backBuffer, rhi::CommandPtr& command, const RenderParams& params)
+{
+    execute(command, backBuffer, params);
+}*/
+
+rhi::BufferPtr getBufferOutput(const RenderGraphTable& res, uint32_t id)
+{
+    assert(res.outputs.size() > id);
+    assert(std::holds_alternative<rhi::BufferPtr>(res.outputs[id].resource));
+    return std::get<rhi::BufferPtr>(res.outputs[id].resource);
+}
+
+void RenderGraph::create(const rhi::DevicePtr& device, const rhi::SwapChainPtr& swapChain)
+{
+}
+
+void RenderGraph::render(rhi::TexturePtr& backBuffer, rhi::CommandPtr& command)
+{
+}
+
+rhi::ResourceState RenderGraph::guessState(const RenderNode& res)
+{
+    switch (res.type)
+    {
+    case RR_DepthWrite:
+        return rhi::DepthWrite;
+    case RR_RenderTarget:
+        return rhi::RenderTarget;
+    case RR_SampledTexture:
+        return rhi::ShaderResource;
+    case RR_ReadOnlyBuffer:
+        return rhi::Indirect;
+    case RR_ConstantBuffer:
+        return rhi::ConstantBuffer;
+    case RR_StorageImage:
+    case RR_StorageBuffer:
+        return rhi::UnorderedAccess;
+    default:
+        return rhi::Undefined;
+    }
+}
+
+void RenderGraph::applyBarrier(rhi::CommandPtr& cmd, const RenderNode& desc, rhi::ResourceState state)
+{
+    const RenderResource& r = desc.resource;
+    if (std::holds_alternative<rhi::BufferPtr>(r))
+    {
+        rhi::BufferPtr buf = std::get<rhi::BufferPtr>(r);
+        cmd->addBufferBarrier(buf, state);
+    }
+    else if (std::holds_alternative<rhi::TexturePtr>(r))
+    {
+        rhi::TexturePtr tex = std::get<rhi::TexturePtr>(r);
+        cmd->addImageBarrier(tex, state);
+    }
+}
+
+void RenderGraph::render(rhi::TexturePtr& backBuffer, rhi::CommandPtr& command, const RenderParams& params)
+{
+    for (size_t i = 0; i < m_nodes.size(); ++i)
+    {
+        RenderGraphNode& node = m_nodes[i];
+        auto& color = rhi::Color::Palette[i];
+
+        // Begin Pass
+        command->beginDebugEvent(node.name, color);
+        node.rendering.viewport = backBuffer->extent();
+
+        // Apply Barrier
+        for (RenderNode& desc : node.resources.outputs)
+        {
+            rhi::ResourceState state = guessState(desc);
+            applyBarrier(command, desc, state);
+        }
+
+        for (RenderNode& desc : node.resources.inputs)
+        {
+            rhi::ResourceState state = guessState(desc);
+            applyBarrier(command, desc, state);
+        }
+
+        // Begin Rendering
+        if (node.type == RP_Graphics)
+            command->beginRendering(node.rendering);
+
+        // Render
+        if (node.pass)
+        {
+            if (node.pass->getPipeline())
+                command->bindPipeline(node.pass->getPipeline(), m_table);
+            node.pass->render(command, params, node.resources);
+        }
+
+        // End Pass
+        if (node.type == RP_Graphics)
+            command->endRendering();
+        command->endDebugEvent();
+    }
+}
+
+static bool isRoot(RenderGraphNode& root, const RenderNode& renderNode)
+{
+    for (auto& in : root.resources.inputs)
+    {
+        if (in.resource == renderNode.resource)
+            return true;
+    }
+    return false;
+}
+
+void RenderGraph::computeEdges(RenderGraphNode& node)
+{
+    for (const RenderNode& renderNode : node.resources.inputs)
+    {
+        // if (guessOutput(desc))
+        // continue;
+
+        for (auto& parent : m_nodes)
+        {
+            if (isRoot(parent, renderNode) &&
+                std::find(parent.edges.begin(), parent.edges.end(), &node) == parent.edges.end())
+            {
+                parent.edges.emplace_back(&node);
+                break;
+            }
+        }
+    }
+}
+
+void RenderGraph::topologicalSort()
+{
+    enum Status
+    {
+        New = 0u,
+        Visited,
+        Added
+    };
+
+    std::stack<RenderGraphNode*> stack;
+    std::vector<uint8_t> node_status(m_nodes.size(), New);
+
+    std::vector<RenderGraphNode> sp = std::move(m_nodes);
+
+    // Topological sorting
+    for (auto& node : sp)
+    {
+        stack.push(&node);
+
+        while (!stack.empty())
+        {
+            RenderGraphNode* node_handle = stack.top();
+
+            if (node_status[node_handle->index] == Added)
+            {
+                stack.pop();
+                continue;
+            }
+
+            if (node_status[node_handle->index] == Visited)
+            {
+                node_status[node_handle->index] = Added;
+                m_nodes.emplace_back(std::move(*node_handle));
+                stack.pop();
+                continue;
+            }
+
+            node_status[node_handle->index] = Visited;
+
+            // Leaf node
+            for (auto child_handle : node_handle->edges)
+            {
+                if (node_status[child_handle->index] == New)
+                    stack.push(child_handle);
+            }
+        }
+    }
+
+    // Reverse
+    std::reverse(m_nodes.begin(), m_nodes.end());
 }
 } // namespace ler::render

@@ -2,8 +2,9 @@
 // Created by loulfy on 04/12/2023.
 //
 
+#include "sys/platform.hpp"
 #include "desktop.hpp"
-#ifdef _WIN32
+#ifdef PLATFORM_WIN
 #include "rhi/d3d12.hpp"
 #endif
 #include "rhi/vulkan.hpp"
@@ -50,7 +51,7 @@ namespace ler::app
             m_device = rhi::vulkan::CreateDevice(devConfig);
 
         if(cfg.api == rhi::GraphicsAPI::D3D12)
-#ifdef _WIN32
+#ifdef PLATFORM_WIN
             m_device = rhi::d3d12::CreateDevice(devConfig);
 #else
             log::exit("D3D12 Not compatible");
@@ -94,6 +95,17 @@ namespace ler::app
         notifyResize();
     }
 
+    struct EmptyMeshRenderer : public render::IMeshRenderer
+    {
+      public:
+        void create(const rhi::DevicePtr& device, const rhi::SwapChainPtr& swapChain, const render::RenderParams& params) override
+        {
+        }
+        void render(rhi::TexturePtr& backBuffer, rhi::CommandPtr& command, const render::RenderParams& params) override
+        {
+        }
+    };
+
     void DesktopApp::run()
     {
         if(m_device->getGraphicsAPI() == rhi::GraphicsAPI::VULKAN)
@@ -101,7 +113,7 @@ namespace ler::app
             ImGui_ImplGlfw_InitForVulkan(m_window, true);
             addPass<rhi::vulkan::ImGuiPass>();
         }
-    #ifdef _WIN32
+    #ifdef PLATFORM_WIN
         else
         {
             ImGui_ImplGlfw_InitForOther(m_window, true);
@@ -110,8 +122,25 @@ namespace ler::app
     #endif
 
         double x, y;
+        render::RenderParams params;
+        params.meshList = &m_meshList;
         for (const auto& pass : m_renderPasses)
+        {
+            /*auto* graph = dynamic_cast<render::RenderGraph*>(pass.get());
+            if(graph)
+            {
+                graph->addResource("instances", m_meshList.getInstanceBuffer());
+                graph->addResource("meshes", m_meshBuffers.getMeshBuffer());
+            }*/
+
             pass->create(m_device, m_swapChain);
+            auto* renderer = dynamic_cast<render::IMeshRenderer*>(pass.get());
+            if(renderer == nullptr)
+                m_meshRenderer.emplace_back(new EmptyMeshRenderer);
+            else
+                m_meshRenderer.emplace_back(renderer);
+            m_meshRenderer.back()->create(m_device, m_swapChain, params);
+        }
 
         notifyResize();
 
@@ -123,10 +152,8 @@ namespace ler::app
             m_camera->handleMouseMove(x, y);
             m_camera->updateViewMatrix();
 
-            render::RenderParams params;
             params.proj = m_camera->getProjMatrix();
             params.view = m_camera->getViewMatrix();
-            params.meshes = &m_meshBuffers;
 
             for (const auto& pass : m_renderPasses)
                 pass->begin();
@@ -136,10 +163,14 @@ namespace ler::app
 
             m_swapChain->present([&](rhi::TexturePtr& backBuffer, rhi::CommandPtr& command){
                 command->addImageBarrier(backBuffer, rhi::RenderTarget);
-                for (const auto& pass : m_renderPasses)
+                for (int i = 0; i < m_renderPasses.size(); ++i)
                 {
+                    const auto& pass = m_renderPasses[i];
                     if(pass->startup())
-                        pass->render(backBuffer, command);
+                    {
+                        m_meshRenderer[i]->render(backBuffer, command, params);
+                        m_renderPasses[i]->render(backBuffer, command);
+                    }
                 }
                 command->addImageBarrier(backBuffer, rhi::Present);
             });
@@ -165,9 +196,11 @@ namespace ler::app
 
         m_meshBuffers.allocate(m_device, *scene->buffers());
         m_meshBuffers.load(*scene->meshes());
-        //m_meshBuffers.allocate(m_device, m_texturePool, *scene->materials());
-        /*m_meshList.installStaticScene(m_device, *scene->instances());
-        m_renderGraph.addResource("instances", m_meshList.getInstanceBuffer());
+        rhi::BindlessTablePtr empty;
+        m_meshBuffers.allocate(m_device, empty, *scene->materials());
+        m_meshList.installStaticScene(m_device, *scene->instances());
+        m_meshList.setMeshBuffers(&m_meshBuffers);
+        /*m_renderGraph.addResource("instances", m_meshList.getInstanceBuffer());
         m_renderGraph.addResource("meshes", m_meshBuffers.getMeshBuffer());
         m_renderGraph.addResource("materials", m_meshBuffers.getSkinBuffer());
         m_renderGraph.addResource("textures", m_texturePool);*/

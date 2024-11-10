@@ -275,7 +275,7 @@ namespace ler::rhi::d3d12
             {
                 if(binding.type == D3D12_DESCRIPTOR_RANGE_TYPE_CBV)
                 {
-                    rootParam.InitAsConstants(1, binding.bindPoint);
+                    rootParam.InitAsConstants(33, binding.bindPoint);
                 }
             }
         }
@@ -407,6 +407,8 @@ namespace ler::rhi::d3d12
         auto pipeline = std::make_shared<Pipeline>(m_context);
 
         ShaderPtr shader = createShader(shaderModule);
+        if(shader->descriptorHeapIndexing)
+            pipeline->m_descriptorHeapIndexing = true;
 
         pipeline->merge(0, shader->rangesCbvSrvUav);
         pipeline->bindingMap.merge(shader->bindingMap);

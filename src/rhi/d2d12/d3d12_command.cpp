@@ -57,9 +57,9 @@ rhi::CommandPtr Queue::createCommandBuffer()
 {
     auto command = std::make_shared<Command>();
     command->queueType = m_queueType;
+    command->m_gpuHeap = m_context.descriptorPool[D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV].get();
 
-    m_context.device->CreateCommandAllocator(m_commandType,
-                                             IID_PPV_ARGS(&command->m_commandAllocator));
+    m_context.device->CreateCommandAllocator(m_commandType, IID_PPV_ARGS(&command->m_commandAllocator));
     m_context.device->CreateCommandList(0, m_commandType, command->m_commandAllocator.Get(), nullptr,
                                         IID_PPV_ARGS(&command->m_commandList));
     return command;
@@ -189,12 +189,16 @@ void Command::addBufferBarrier(const BufferPtr& buffer, ResourceState new_state)
     if (buffer->state == new_state)
         return;
     ResourceState old_state = buffer->state;
-    auto buf = checked_cast<Buffer*>(buffer.get());
-    auto barrier = CD3DX12_RESOURCE_BARRIER::Transition(buf->handle, Device::util_to_d3d_resource_state(old_state),
-                                                        Device::util_to_d3d_resource_state(new_state));
+    auto* buff = checked_cast<Buffer*>(buffer.get());
+    std::vector<D3D12_RESOURCE_BARRIER> barriers;
+    barriers.push_back(CD3DX12_RESOURCE_BARRIER::Transition(buff->handle, Device::util_to_d3d_resource_state(old_state),
+                                                            Device::util_to_d3d_resource_state(new_state)));
+
+    if (buff->desc.Flags & D3D12_RESOURCE_FLAG_ALLOW_UNORDERED_ACCESS)
+        barriers.push_back(CD3DX12_RESOURCE_BARRIER::UAV(buff->handle));
 
     buffer->state = new_state;
-    m_commandList->ResourceBarrier(1, &barrier);
+    m_commandList->ResourceBarrier(barriers.size(), barriers.data());
 }
 
 void Command::clearColorImage(const TexturePtr& texture, const std::array<float, 4>& color) const
@@ -236,7 +240,7 @@ void Command::copyBufferToTexture(const BufferPtr& buffer, const TexturePtr& tex
     }
 
     // prepare texture to color layout
-    //addImageBarrier(texture, ShaderResource);
+    // addImageBarrier(texture, ShaderResource);
 }
 
 void Command::copyBuffer(const BufferPtr& src, const BufferPtr& dst, uint64_t byteSize, uint64_t dstOffset)
@@ -248,10 +252,13 @@ void Command::copyBuffer(const BufferPtr& src, const BufferPtr& dst, uint64_t by
 
 void Command::fillBuffer(const BufferPtr& dst, uint32_t value) const
 {
+    ID3D12DescriptorHeap* heap = m_gpuHeap->heap();
+    m_commandList->SetDescriptorHeaps(1, &heap);
+
     auto* buff = checked_cast<Buffer*>(dst.get());
     D3D12_GPU_DESCRIPTOR_HANDLE gpuHandle = buff->clearGpuHandle.getGpuHandle();
     D3D12_CPU_DESCRIPTOR_HANDLE cpuHandle = buff->clearCpuHandle.getCpuHandle();
-    static std::array<uint32_t,4> clears;
+    static std::array<uint32_t, 4> clears;
     clears.fill(value);
     m_commandList->ClearUnorderedAccessViewUint(gpuHandle, cpuHandle, buff->handle, clears.data(), 0, nullptr);
 }
@@ -341,9 +348,9 @@ void Command::bindPipeline(const PipelinePtr& pipeline, const BindlessTablePtr& 
     m_commandList->SetPipelineState(native->pipelineState.Get());
 
     auto* bindless = checked_cast<BindlessTable*>(table.get());
-    //DescriptorSet& descriptorSet = native->getDescriptorSet(0);
+    // DescriptorSet& descriptorSet = native->getDescriptorSet(0);
 
-    const std::array<ID3D12DescriptorHeap*,2> heaps = bindless->heaps();
+    const std::array<ID3D12DescriptorHeap*, 2> heaps = bindless->heaps();
     m_commandList->SetDescriptorHeaps(heaps.size(), heaps.data());
 
     if (native->isGraphics())
@@ -357,9 +364,13 @@ void Command::bindPipeline(const PipelinePtr& pipeline, const BindlessTablePtr& 
     }
 }
 
-void Command::pushConstant(const PipelinePtr& pipeline, const void* data, uint8_t size) const
+void Command::pushConstant(const PipelinePtr& pipeline, ShaderType stage, const void* data, uint8_t size) const
 {
-    m_commandList->SetGraphicsRoot32BitConstants(0u, size/sizeof(uint32_t), data, 0u);
+    auto* native = checked_cast<Pipeline*>(pipeline.get());
+    if (native->isGraphics())
+        m_commandList->SetGraphicsRoot32BitConstants(0u, size / sizeof(uint32_t), data, 0u);
+    else
+        m_commandList->SetComputeRoot32BitConstants(0u, size / sizeof(uint32_t), data, 0u);
 }
 
 void Command::beginRendering(const rhi::PipelinePtr& pipeline, TexturePtr& backBuffer)
@@ -392,7 +403,7 @@ void Command::beginRendering(const RenderingInfo& renderingInfo) const
         assert(rColorAttachment.texture);
         auto* image = checked_cast<Texture*>(rColorAttachment.texture.get());
         colors[i] = image->rtvDescriptor.getCpuHandle();
-        if(rColorAttachment.loadOp == AttachmentLoadOp::Clear)
+        if (rColorAttachment.loadOp == AttachmentLoadOp::Clear)
             m_commandList->ClearRenderTargetView(image->rtvDescriptor.getCpuHandle(), color.data(), 0, nullptr);
     }
 
@@ -400,7 +411,8 @@ void Command::beginRendering(const RenderingInfo& renderingInfo) const
     {
         auto* image = checked_cast<Texture*>(renderingInfo.depth.texture.get());
         depth = image->rtvDescriptor.getCpuHandle();
-        m_commandList->ClearDepthStencilView(depth, D3D12_CLEAR_FLAG_DEPTH, 1.f, 0.f, 0, nullptr);
+        if (renderingInfo.depth.loadOp == AttachmentLoadOp::Clear)
+            m_commandList->ClearDepthStencilView(depth, D3D12_CLEAR_FLAG_DEPTH, 1.f, 0.f, 0, nullptr);
     }
 
     m_commandList->OMSetRenderTargets(renderingInfo.colorCount, colors.data(), FALSE,

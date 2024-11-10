@@ -9,6 +9,7 @@ namespace ler::render
 void MeshBuffers::allocate(const rhi::DevicePtr& device, const flatbuffers::Vector<const scene::Buffer*>& bufferEntries)
 {
     rhi::StoragePtr storage = device->getStorage();
+    m_latch = std::make_shared<coro::latch>(bufferEntries.size());
     m_file = storage->openFile(sys::ASSETS_DIR / "scene.bin");
     for (const scene::Buffer* bufferEntry : bufferEntries)
     {
@@ -46,6 +47,7 @@ void MeshBuffers::allocate(const rhi::DevicePtr& device, const flatbuffers::Vect
 
         storage->requestLoadBuffer(*m_latch, m_file, buffer, bufferEntry->byte_length(), bufferEntry->byte_offset());
     }
+    coro::sync_wait(*m_latch);
 }
 
 void MeshBuffers::allocate(const rhi::DevicePtr& device, rhi::BindlessTablePtr& table, const flatbuffers::Vector<flatbuffers::Offset<scene::Material>>& materialEntries)
@@ -78,10 +80,13 @@ void MeshBuffers::allocate(const rhi::DevicePtr& device, rhi::BindlessTablePtr& 
     }
 
     rhi::BufferDesc meshDesc;
+    meshDesc.debugName = "meshBuffer";
+    meshDesc.stride = sizeof(DrawMesh);
     meshDesc.byteSize = sizeof(DrawMesh) * m_drawMeshes.size();
     m_meshBuffer = device->createBuffer(meshDesc);
 
     rhi::BufferDesc skinDesc;
+    skinDesc.stride = sizeof(DrawSkin);
     skinDesc.byteSize = sizeof(DrawSkin) * m_drawSkins.size();
     m_skinBuffer = device->createBuffer(skinDesc);
 
