@@ -9,9 +9,9 @@ namespace ler::rhi::vulkan
 BindlessTable::BindlessTable(const VulkanContext& context, uint32_t count) : m_context(context)
 {
     std::vector<vk::DescriptorPoolSize> descriptorPoolSize;
-    std::vector<vk::DescriptorSetLayoutBinding> bindings;
-    descriptorPoolSize.emplace_back(vk::DescriptorType::eMutableEXT, count);
-    descriptorPoolSize.emplace_back(vk::DescriptorType::eSampler, count);
+    //std::vector<vk::DescriptorSetLayoutBinding> bindings;
+    for(auto& b : kStandard)
+        descriptorPoolSize.emplace_back(b, count);
 
     auto descriptorPoolInfo = vk::DescriptorPoolCreateInfo();
     descriptorPoolInfo.setPoolSizes(descriptorPoolSize);
@@ -126,11 +126,12 @@ vk::UniqueDescriptorSetLayout BindlessTable::buildBindlessLayout(const VulkanCon
     mutable_info.setMutableDescriptorTypeLists(mutable_list);
 
     vk::DescriptorSetLayoutBindingFlagsCreateInfo extended_info;
-    vk::DescriptorBindingFlags bindless_flags =
+    constexpr vk::DescriptorBindingFlags bindlessFlags =
         vk::DescriptorBindingFlagBits::ePartiallyBound | vk::DescriptorBindingFlagBits::eUpdateAfterBind;
-    std::vector<vk::DescriptorBindingFlags> binding_flags(descriptorLayoutInfo.bindingCount, bindless_flags);
+    std::vector<vk::DescriptorBindingFlags> binding_flags(descriptorLayoutInfo.bindingCount, bindlessFlags);
     extended_info.setBindingFlags(binding_flags);
-    extended_info.setPNext(&mutable_info);
+    if(useMutable)
+        extended_info.setPNext(&mutable_info);
 
     descriptorLayoutInfo.setFlags(vk::DescriptorSetLayoutCreateFlagBits::eUpdateAfterBindPool);
     descriptorLayoutInfo.setPNext(&extended_info);
@@ -196,7 +197,7 @@ bool BindlessTable::visitBuffer(const BufferPtr& buffer, uint32_t slot)
 
     vk::WriteDescriptorSet descriptorWriteInfo;
     descriptorWriteInfo.setDescriptorType(type);
-    descriptorWriteInfo.setDstBinding(0);
+    descriptorWriteInfo.setDstBinding(3);
     descriptorWriteInfo.setDescriptorCount(1);
     descriptorWriteInfo.setDstSet(m_descriptor);
     descriptorWriteInfo.setDstArrayElement(slot);

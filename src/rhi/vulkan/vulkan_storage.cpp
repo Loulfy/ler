@@ -341,5 +341,7 @@ coro::task<> Storage::makeBufferTask(coro::latch& latch, ReadOnlyFilePtr file, B
 
     latch.count_down();
     releaseStaging(bufferId);
+
+    co_return;
 }
 } // namespace ler::rhi::vulkan

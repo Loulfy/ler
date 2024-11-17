@@ -48,6 +48,17 @@ namespace std
 
 namespace ler::rhi::vulkan
 {
+    struct VulkanFeatures
+    {
+        uint32_t apiVersion = VK_API_VERSION_1_3;
+        bool hostBuffer = false;
+        bool rayTracing = false;
+        bool memoryPriority = false;
+        bool binaryPipeline = false;
+        bool mutableDescriptor = false;
+        bool drawIndirectCount = false;
+    };
+
     struct VulkanContext
     {
         vk::Instance instance;

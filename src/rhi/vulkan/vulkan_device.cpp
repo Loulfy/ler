@@ -6,6 +6,8 @@
 #include "rhi/vulkan.hpp"
 #include "log/log.hpp"
 
+#include <vulkan/vulkan_beta.h>
+
 VULKAN_HPP_DEFAULT_DISPATCH_LOADER_DYNAMIC_STORAGE
 
 namespace ler::rhi::vulkan
@@ -17,13 +19,141 @@ namespace ler::rhi::vulkan
 
     static bool gpuFilter(const vk::PhysicalDevice& phyDev)
     {
+#ifdef PLATFORM_MACOS
+        return phyDev.getProperties().deviceType == vk::PhysicalDeviceType::eIntegratedGpu;
+#else
         return phyDev.getProperties().deviceType == vk::PhysicalDeviceType::eDiscreteGpu;
+#endif
     }
 
     Device::~Device()
     {
         m_storage.reset();
         vmaDestroyAllocator(m_context.allocator);
+    }
+
+    using PropertiesChain = vk::StructureChain<vk::PhysicalDeviceProperties2,
+                vk::PhysicalDeviceSubgroupProperties,
+                vk::PhysicalDeviceExternalMemoryHostPropertiesEXT>;
+
+    using FeaturesChain = vk::StructureChain<vk::PhysicalDeviceFeatures2,
+                vk::PhysicalDeviceVulkan11Features,
+                vk::PhysicalDeviceVulkan12Features,
+                vk::PhysicalDeviceVulkan13Features,
+                vk::PhysicalDeviceSynchronization2Features,
+                vk::PhysicalDeviceDynamicRenderingFeatures,
+                vk::PhysicalDeviceMutableDescriptorTypeFeaturesEXT,
+                vk::PhysicalDeviceRayQueryFeaturesKHR,
+                vk::PhysicalDeviceRayTracingPipelineFeaturesKHR,
+                vk::PhysicalDeviceAccelerationStructureFeaturesKHR>;
+
+    using InfoChain = vk::StructureChain<vk::DeviceCreateInfo,
+                vk::PhysicalDeviceVulkan11Features,
+                vk::PhysicalDeviceVulkan12Features,
+                vk::PhysicalDeviceVulkan13Features,
+                vk::PhysicalDeviceSynchronization2Features,
+                vk::PhysicalDeviceDynamicRenderingFeatures,
+                vk::PhysicalDeviceMutableDescriptorTypeFeaturesEXT,
+                vk::PhysicalDeviceRayQueryFeaturesKHR,
+                vk::PhysicalDeviceRayTracingPipelineFeaturesKHR,
+                vk::PhysicalDeviceAccelerationStructureFeaturesKHR>;
+
+    VulkanFeatures getSupportedFeatures(const std::set<std::string>& supportedExtensionSet, const PropertiesChain& p, const FeaturesChain& f)
+    {
+        VulkanFeatures features;
+        features.apiVersion = p.get<vk::PhysicalDeviceProperties2>().properties.apiVersion;
+        features.drawIndirectCount = f.get<vk::PhysicalDeviceVulkan12Features>().drawIndirectCount;
+
+        if(supportedExtensionSet.contains(VK_KHR_RAY_QUERY_EXTENSION_NAME))
+            features.rayTracing = true;
+        if(supportedExtensionSet.contains(VK_KHR_EXTERNAL_MEMORY_EXTENSION_NAME))
+            features.hostBuffer = true;
+        if(supportedExtensionSet.contains(VK_EXT_MEMORY_PRIORITY_EXTENSION_NAME))
+            features.memoryPriority = true;
+        if(supportedExtensionSet.contains(VK_KHR_PIPELINE_BINARY_EXTENSION_NAME))
+            features.binaryPipeline = true;
+        if(supportedExtensionSet.contains(VK_EXT_MUTABLE_DESCRIPTOR_TYPE_EXTENSION_NAME))
+            features.mutableDescriptor = true;
+
+        return features;
+    }
+
+    void populateRequiredDeviceExtensions(const VulkanFeatures& features, std::vector<const char*>& deviceExtensions)
+    {
+        // Enable Dynamic Rendering and Barrier2 for Vulkan 1.2
+        if(VK_VERSION_MINOR(features.apiVersion) == 2)
+        {
+            deviceExtensions.emplace_back(VK_KHR_SYNCHRONIZATION_2_EXTENSION_NAME);
+            deviceExtensions.emplace_back(VK_KHR_DYNAMIC_RENDERING_EXTENSION_NAME);
+        }
+
+        // Enable RayTracing
+        if(features.rayTracing)
+        {
+            deviceExtensions.emplace_back(VK_KHR_DEFERRED_HOST_OPERATIONS_EXTENSION_NAME);
+            deviceExtensions.emplace_back(VK_KHR_ACCELERATION_STRUCTURE_EXTENSION_NAME);
+            deviceExtensions.emplace_back(VK_KHR_RAY_TRACING_PIPELINE_EXTENSION_NAME);
+            deviceExtensions.emplace_back(VK_KHR_RAY_QUERY_EXTENSION_NAME);
+        }
+
+        // Enable Pipeline library
+        if(features.binaryPipeline)
+        {
+            deviceExtensions.emplace_back(VK_KHR_MAINTENANCE_5_EXTENSION_NAME);
+            deviceExtensions.emplace_back(VK_KHR_PIPELINE_BINARY_EXTENSION_NAME);
+        }
+
+        // Enable VMA priority
+        if(features.memoryPriority)
+            deviceExtensions.emplace_back(VK_EXT_MEMORY_PRIORITY_EXTENSION_NAME);
+
+        // Malloc staging buffer
+        if(features.hostBuffer)
+            deviceExtensions.emplace_back(VK_KHR_EXTERNAL_MEMORY_EXTENSION_NAME);
+
+        // Enable Mutable Descriptor
+        if(features.mutableDescriptor)
+            deviceExtensions.emplace_back(VK_EXT_MUTABLE_DESCRIPTOR_TYPE_EXTENSION_NAME);
+    }
+
+    void printVulkanFeatures(const VulkanFeatures& features, const PropertiesChain& p, const FeaturesChain& f)
+    {
+        uint32_t major = VK_VERSION_MAJOR(features.apiVersion);
+        uint32_t minor = VK_VERSION_MINOR(features.apiVersion);
+        uint32_t patch = VK_VERSION_PATCH(features.apiVersion);
+
+        log::info("API: {}.{}.{}", major, minor, patch);
+        auto subgroupProps = p.get<vk::PhysicalDeviceSubgroupProperties>();
+        auto memoryProps = p.get<vk::PhysicalDeviceExternalMemoryHostPropertiesEXT>();
+        log::info("RayTracing: {}", features.rayTracing);
+        log::info("HostBuffer: {}", features.hostBuffer);
+        log::info("MutableDescriptor: {}", features.mutableDescriptor);
+        log::info("DrawIndirectCount: {}", features.drawIndirectCount);
+        log::info("SubgroupSize: {}", subgroupProps.subgroupSize);
+        log::info("Subgroup Support: {}", vk::to_string(subgroupProps.supportedOperations));
+        log::info("MinImportedHostPointerAlignment: {}", memoryProps.minImportedHostPointerAlignment);
+    }
+
+    void unlinkUnsupportedFeatures(InfoChain& createInfoChain, const VulkanFeatures& features)
+    {
+        const uint32_t minor = VK_VERSION_MINOR(features.apiVersion);
+
+        if(minor == 2)
+            createInfoChain.unlink<vk::PhysicalDeviceVulkan13Features>();
+        if(minor == 3)
+        {
+            createInfoChain.unlink<vk::PhysicalDeviceSynchronization2Features>();
+            createInfoChain.unlink<vk::PhysicalDeviceDynamicRenderingFeatures>();
+        }
+
+        if(!features.mutableDescriptor)
+            createInfoChain.unlink<vk::PhysicalDeviceMutableDescriptorTypeFeaturesEXT>();
+        if(!features.rayTracing)
+        {
+            createInfoChain.unlink<vk::PhysicalDeviceRayQueryFeaturesKHR>();
+            createInfoChain.unlink<vk::PhysicalDeviceRayTracingPipelineFeaturesKHR>();
+            createInfoChain.unlink<vk::PhysicalDeviceAccelerationStructureFeaturesKHR>();
+        }
     }
 
     Device::Device(const DeviceConfig& config)
@@ -38,8 +168,6 @@ namespace ler::rhi::vulkan
         uint32_t patch = VK_VERSION_PATCH(sdkVersion);
 
         log::info("Vulkan SDK {}.{}.{}", major, minor, patch);
-        if(minor < 3)
-            log::exit("Vulkan 1.3 is not supported, please update driver");
 
         std::vector<const char*> extensions;
         extensions.reserve(10);
@@ -49,6 +177,7 @@ namespace ler::rhi::vulkan
             extensions.emplace_back(VK_EXT_DEBUG_REPORT_EXTENSION_NAME);
             extensions.emplace_back(VK_EXT_VALIDATION_FEATURES_EXTENSION_NAME);
         }
+
         extensions.emplace_back(VK_KHR_GET_PHYSICAL_DEVICE_PROPERTIES_2_EXTENSION_NAME);
         extensions.insert(extensions.end(), config.extensions.begin(), config.extensions.end());
 
@@ -56,30 +185,21 @@ namespace ler::rhi::vulkan
                 "VK_LAYER_KHRONOS_validation"
         };
 
-        std::vector<const char*> devices = {
+        std::vector<const char*> deviceExtensions = {
                 VK_KHR_GET_MEMORY_REQUIREMENTS_2_EXTENSION_NAME,
-                VK_KHR_BIND_MEMORY_2_EXTENSION_NAME,
                 // VULKAN MEMORY ALLOCATOR
                 VK_KHR_DEDICATED_ALLOCATION_EXTENSION_NAME,
+                VK_KHR_BIND_MEMORY_2_EXTENSION_NAME,
                 VK_KHR_BUFFER_DEVICE_ADDRESS_EXTENSION_NAME,
                 VK_EXT_MEMORY_BUDGET_EXTENSION_NAME,
-                VK_EXT_MEMORY_PRIORITY_EXTENSION_NAME,
                 // SWAP CHAIN
                 VK_KHR_SWAPCHAIN_EXTENSION_NAME,
-                // RAY TRACING
-                //VK_KHR_DEFERRED_HOST_OPERATIONS_EXTENSION_NAME,
-                // DYNAMIC RENDERING
-                VK_KHR_DYNAMIC_RENDERING_EXTENSION_NAME,
-                VK_EXT_MUTABLE_DESCRIPTOR_TYPE_EXTENSION_NAME,
-                VK_KHR_EXTERNAL_MEMORY_EXTENSION_NAME,
-                // pipeline library
-                //VK_KHR_MAINTENANCE_5_EXTENSION_NAME,
-                //VK_KHR_PIPELINE_BINARY_EXTENSION_NAME
         };
 
-        // Malloc staging buffer
-        if(config.hostBuffer)
-            devices.emplace_back(VK_EXT_EXTERNAL_MEMORY_HOST_EXTENSION_NAME);
+#ifdef PLATFORM_MACOS
+        extensions.emplace_back(VK_KHR_PORTABILITY_ENUMERATION_EXTENSION_NAME);
+        deviceExtensions.emplace_back(VK_KHR_PORTABILITY_SUBSET_EXTENSION_NAME);
+#endif
 
         // Create instance
         vk::ApplicationInfo appInfo;
@@ -91,6 +211,9 @@ namespace ler::rhi::vulkan
         if(config.debug)
             instInfo.setPEnabledLayerNames(layers);
         instInfo.setPEnabledExtensionNames(extensions);
+#ifdef PLATFORM_MACOS
+        instInfo.setFlags(vk::InstanceCreateFlagBits::eEnumeratePortabilityKHR);
+#endif
         m_instance = vk::createInstanceUnique(instInfo);
         VULKAN_HPP_DEFAULT_DISPATCHER.init(m_instance.get());
 
@@ -106,7 +229,7 @@ namespace ler::rhi::vulkan
         for (const auto& devExt: m_physicalDevice.enumerateDeviceExtensionProperties())
             supportedExtensionSet.insert(devExt.extensionName);
 
-        for(const char* devExt : devices)
+        for(const char* devExt : deviceExtensions)
         {
             if(!supportedExtensionSet.contains(devExt))
             {
@@ -116,15 +239,22 @@ namespace ler::rhi::vulkan
             }
         }
 
-        bool supportRayTracing = supportedExtensionSet.contains(VK_KHR_RAY_QUERY_EXTENSION_NAME);
-        log::info("Support Ray Tracing: {}", supportRayTracing);
+        // Device Properties
+        PropertiesChain pp;
+        m_physicalDevice.getProperties2(&pp.get<vk::PhysicalDeviceProperties2>());
 
         // Device Features
-        vk::PhysicalDeviceFeatures features = m_physicalDevice.getFeatures();
+        FeaturesChain ff;
+        m_physicalDevice.getFeatures2(&ff.get<vk::PhysicalDeviceFeatures2>());
+        const vk::PhysicalDeviceFeatures& features = ff.get<vk::PhysicalDeviceFeatures2>().features;
+
+        const VulkanFeatures vulkanFeatures = getSupportedFeatures(supportedExtensionSet, pp, ff);
+        populateRequiredDeviceExtensions(vulkanFeatures, deviceExtensions);
+        printVulkanFeatures(vulkanFeatures, pp, ff);
 
         // Find Graphics Queue
         const auto queueFamilies = m_physicalDevice.getQueueFamilyProperties();
-        const auto family = std::find_if(queueFamilies.begin(), queueFamilies.end(), [](const vk::QueueFamilyProperties& queueFamily) {
+        const auto family = std::ranges::find_if(queueFamilies, [](const vk::QueueFamilyProperties& queueFamily) {
             return queueFamily.queueCount > 0 && queueFamily.queueFlags & vk::QueueFlagBits::eGraphics;
         });
 
@@ -153,20 +283,10 @@ namespace ler::rhi::vulkan
         for(auto& q : queueCreateInfos)
             log::info("Queue Family {}: {}", q.queueFamilyIndex, vk::to_string(queueFamilies[q.queueFamilyIndex].queueFlags));
 
-        vk::PhysicalDeviceProperties2 p2;
-        vk::PhysicalDeviceSubgroupProperties subgroupProps;
-        vk::PhysicalDeviceExternalMemoryHostPropertiesEXT memoryProps;
-        p2.pNext = &subgroupProps;
-        subgroupProps.pNext = &memoryProps;
-        m_physicalDevice.getProperties2(&p2);
-        log::info("SubgroupSize: {}", subgroupProps.subgroupSize);
-        log::info("Subgroup Support: {}", vk::to_string(subgroupProps.supportedOperations));
-        log::info("MinImportedHostPointerAlignment: {}", memoryProps.minImportedHostPointerAlignment);
-
         // Create Device
         vk::DeviceCreateInfo deviceInfo;
         deviceInfo.setQueueCreateInfos(queueCreateInfos);
-        deviceInfo.setPEnabledExtensionNames(devices);
+        deviceInfo.setPEnabledExtensionNames(deviceExtensions);
         if(config.debug)
             deviceInfo.setPEnabledLayerNames(layers);
         deviceInfo.setPEnabledFeatures(&features);
@@ -174,55 +294,37 @@ namespace ler::rhi::vulkan
         vk::PhysicalDeviceMutableDescriptorTypeFeaturesEXT mutableFeature;
         mutableFeature.setMutableDescriptorType(true);
 
-        vk::PhysicalDeviceVulkan11Features vulkan11Features;
-        vulkan11Features.setShaderDrawParameters(true);
-
-        vk::PhysicalDeviceVulkan12Features vulkan12Features;
-        vulkan12Features.setDescriptorIndexing(true);
-        vulkan12Features.setRuntimeDescriptorArray(true);
-        vulkan12Features.setDescriptorBindingPartiallyBound(true);
-        vulkan12Features.setDescriptorBindingStorageBufferUpdateAfterBind(true);
-        vulkan12Features.setDescriptorBindingSampledImageUpdateAfterBind(true);
-        vulkan12Features.setDescriptorBindingUniformBufferUpdateAfterBind(true);
-        vulkan12Features.setDescriptorBindingStorageImageUpdateAfterBind(true);
-        vulkan12Features.setDescriptorBindingVariableDescriptorCount(true);
-        vulkan12Features.setTimelineSemaphore(true);
-        vulkan12Features.setBufferDeviceAddress(true);
-        vulkan12Features.setShaderSampledImageArrayNonUniformIndexing(true);
-        vulkan12Features.setSamplerFilterMinmax(true);
-
-        vulkan12Features.setBufferDeviceAddress(true);
-        vulkan12Features.setRuntimeDescriptorArray(true);
-        vulkan12Features.setDescriptorBindingVariableDescriptorCount(true);
-        vulkan12Features.setShaderSampledImageArrayNonUniformIndexing(true);
-        vulkan12Features.setDrawIndirectCount(true);
-
-        vk::PhysicalDeviceVulkan13Features vulkan13Features;
-        vulkan13Features.setMaintenance4(true);
-        vulkan13Features.setDynamicRendering(true);
-        vulkan13Features.setSynchronization2(true);
-
         vk::PhysicalDevicePipelineBinaryFeaturesKHR pipelineFeature;
         pipelineFeature.setPipelineBinaries(true);
 
-        supportRayTracing = false;
-        vk::StructureChain<vk::DeviceCreateInfo,
-                //vk::PhysicalDeviceRayQueryFeaturesKHR,
-                /*vk::PhysicalDeviceRayTracingPipelineFeaturesKHR,*/
-                //vk::PhysicalDeviceAccelerationStructureFeaturesKHR,
-                vk::PhysicalDeviceMutableDescriptorTypeFeaturesEXT,
-                //vk::PhysicalDevicePipelineBinaryFeaturesKHR,
-                vk::PhysicalDeviceVulkan11Features,
-                vk::PhysicalDeviceVulkan12Features,
-                vk::PhysicalDeviceVulkan13Features> createInfoChain(
+        vk::PhysicalDeviceSynchronization2Features sync2Features;
+        sync2Features.setSynchronization2(true);
+
+        vk::PhysicalDeviceDynamicRenderingFeatures dynRenderFeature;
+        dynRenderFeature.setDynamicRendering(true);
+
+        vk::PhysicalDeviceRayQueryFeaturesKHR rayQueryFeatures;
+        rayQueryFeatures.setRayQuery(true);
+
+        vk::PhysicalDeviceRayTracingPipelineFeaturesKHR rayTracingPipelineFeatures;
+        rayTracingPipelineFeatures.setRayTracingPipeline(true);
+
+        vk::PhysicalDeviceAccelerationStructureFeaturesKHR accelerationStructureFeatures;
+        accelerationStructureFeatures.setAccelerationStructure(true);
+
+        InfoChain createInfoChain(
                 deviceInfo,
-                //{supportRayTracing},
-                //{supportRayTracing},
+                ff.get<vk::PhysicalDeviceVulkan11Features>(),
+                ff.get<vk::PhysicalDeviceVulkan12Features>(),
+                ff.get<vk::PhysicalDeviceVulkan13Features>(),
+                sync2Features,
+                dynRenderFeature,
                 mutableFeature,
-                //pipelineFeature,
-                vulkan11Features,
-                vulkan12Features,
-                vulkan13Features);
+                rayQueryFeatures,
+                rayTracingPipelineFeatures,
+                accelerationStructureFeatures);
+
+        unlinkUnsupportedFeatures(createInfoChain, vulkanFeatures);
 
         m_device = m_physicalDevice.createDeviceUnique(createInfoChain.get<vk::DeviceCreateInfo>());
         VULKAN_HPP_DEFAULT_DISPATCHER.init(m_device.get());
@@ -231,7 +333,7 @@ namespace ler::rhi::vulkan
 
         // Create Memory Allocator
         VmaAllocatorCreateInfo allocatorCreateInfo = {};
-        allocatorCreateInfo.vulkanApiVersion = VK_API_VERSION_1_3;
+        allocatorCreateInfo.vulkanApiVersion = vulkanFeatures.apiVersion;
         allocatorCreateInfo.device = m_device.get();
         allocatorCreateInfo.instance = m_instance.get();
         allocatorCreateInfo.physicalDevice = m_physicalDevice;
@@ -251,11 +353,11 @@ namespace ler::rhi::vulkan
         m_context.allocator = allocator;
         m_context.debug = config.debug;
 
-        m_bindlessLayout = BindlessTable::buildBindlessLayout(m_context, 128, true);
+        m_bindlessLayout = BindlessTable::buildBindlessLayout(m_context, 128, false);
         m_context.bindlessLayout = m_bindlessLayout.get();
 
         m_context.hostBuffer = config.hostBuffer;
-        m_context.hostPointerAlignment = memoryProps.minImportedHostPointerAlignment;
+        m_context.hostPointerAlignment = pp.get<vk::PhysicalDeviceExternalMemoryHostPropertiesEXT>().minImportedHostPointerAlignment;
 
         m_queues[int(QueueType::Graphics)] = std::make_unique<Queue>(m_context, QueueType::Graphics);
         m_queues[int(QueueType::Transfer)] = std::make_unique<Queue>(m_context, QueueType::Transfer);

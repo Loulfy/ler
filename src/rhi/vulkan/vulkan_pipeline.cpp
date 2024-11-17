@@ -184,7 +184,7 @@ namespace ler::rhi::vulkan
     void BasePipeline::reflectPipelineLayout(vk::Device device, const std::span<ShaderPtr>& shaders)
     {
         // PIPELINE LAYOUT STATE
-        auto layoutInfo = vk::PipelineLayoutCreateInfo();
+        /*auto layoutInfo = vk::PipelineLayoutCreateInfo();
         std::vector<vk::PushConstantRange> pushConstants;
         for (auto& shader: shaders)
             pushConstants.insert(pushConstants.end(), shader->pushConstants.begin(), shader->pushConstants.end());
@@ -253,10 +253,15 @@ namespace ler::rhi::vulkan
 
             allocator.layout = device.createDescriptorSetLayoutUnique(descriptorLayoutInfo);
             setLayouts.push_back(allocator.layout.get());
-        }
+        }*/
 
-        setLayouts[0] = m_context.bindlessLayout;
-        layoutInfo.setSetLayouts(setLayouts);
+        vk::PipelineLayoutCreateInfo layoutInfo;
+        std::vector<vk::PushConstantRange> pushConstants;
+        for (const auto& shader: shaders)
+            pushConstants.insert(pushConstants.end(), shader->pushConstants.begin(), shader->pushConstants.end());
+        layoutInfo.setPushConstantRanges(pushConstants);
+
+        layoutInfo.setSetLayouts(m_context.bindlessLayout);
         pipelineLayout = device.createPipelineLayoutUnique(layoutInfo);
     }
 

@@ -54,6 +54,19 @@ namespace ler::rhi::vulkan
             .setPNext(&semaphoreTypeInfo);
 
         trackingSemaphore = context.device.createSemaphoreUnique(semaphoreInfo);
+
+        if(!m_context.debug)
+            return;
+
+        vk::DebugUtilsObjectNameInfoEXT nameInfo;
+        nameInfo.setObjectType(vk::ObjectType::eQueue);
+        auto raw = static_cast<VkQueue>(m_queue);
+        nameInfo.setObjectHandle(reinterpret_cast<uint64_t>(raw));
+        if(queueID == QueueType::Graphics)
+            nameInfo.setPObjectName("GraphicsQueue");
+        if(queueID == QueueType::Transfer)
+            nameInfo.setPObjectName("TransferQueue");
+        m_context.device.setDebugUtilsObjectNameEXT(nameInfo);
     }
 
     rhi::CommandPtr Queue::createCommandBuffer()
