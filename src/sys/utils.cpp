@@ -5,23 +5,26 @@
 #include "utils.hpp"
 #include "platform.hpp"
 
-#ifdef _WIN32
+#ifdef PLATFORM_WIN
 #include <ShlObj.h>
 #include <Wbemidl.h>
 #include <windows.h>
 #include <comdef.h>
-#else
+#elif PLATFORM_LINUX
 #include <pwd.h>
 #include <iconv.h>
 #include <sys/sysinfo.h>
 #include <unistd.h>
+#elif PLATFORM_MACOS
+#include <sys/types.h>
+#include <sys/sysctl.h>
 #endif
 
 namespace ler::sys
 {
 std::string getHomeDir()
 {
-#ifdef _WIN32
+#ifdef PLATFORM_WIN
     wchar_t wide_path[MAX_PATH];
     if (SUCCEEDED(SHGetFolderPathW(nullptr, CSIDL_PROFILE, nullptr, SHGFP_TYPE_CURRENT, wide_path)))
     {
@@ -31,7 +34,7 @@ std::string getHomeDir()
             return path;
         }
     }
-#else
+#elif PLATFORM_LINUX
     struct passwd* pw = getpwuid(getuid());
     if (pw != nullptr)
         return pw->pw_dir;
@@ -42,7 +45,7 @@ std::string getHomeDir()
 
 unsigned int getRamCapacity()
 {
-#ifdef _WIN32
+#ifdef PLATFORM_WIN
     MEMORYSTATUSEX status;
     status.dwLength = sizeof(status);
     if (GlobalMemoryStatusEx(&status))
@@ -50,20 +53,26 @@ unsigned int getRamCapacity()
         DWORDLONG ramCapacity = status.ullTotalPhys;
         return ramCapacity / (1024ull * 1024ull);
     }
-#else
+#elif PLATFORM_LINUX
     struct sysinfo info;
     if (sysinfo(&info) == 0)
     {
         long ramCapacity = info.totalram * info.mem_unit;
         return ramCapacity / (1024 * 1024);
     }
+#elif PLATFORM_MACOS
+    constexpr std::string_view mib = "hw.memsize";
+    uint64_t ramCapacity = 0;
+    size_t len = sizeof(uint64_t);
+    if (sysctlbyname(mib.data(), &ramCapacity, &len, nullptr, 0) == 0)
+        return ramCapacity / (1024 * 1024);
 #endif
     return 0;
 }
 
 std::string getCpuName()
 {
-#ifdef _WIN32
+#ifdef PLATFORM_WIN
     HRESULT hres;
 
     // Step 1: Initialize COM
@@ -160,7 +169,7 @@ std::string getCpuName()
     std::string trimmed(cpuName);
     trimmed.erase(trimmed.find_last_not_of(' ') + 1);
     return trimmed;
-#else
+#elif PLATFORM_LINUX
     std::ifstream cpuinfo("/proc/cpuinfo");
     std::string line;
 
@@ -174,6 +183,12 @@ std::string getCpuName()
             }
         }
     }
+#elif PLATFORM_MACOS
+    constexpr std::string_view mib = "machdep.cpu.brand_string";
+    char cpuName[256];
+    size_t len = 256;
+    if(sysctlbyname(mib.data(), cpuName, &len, nullptr, 0) == 0)
+        return cpuName;
 #endif
     return {};
 }
@@ -198,12 +213,13 @@ std::string toUtf8(const std::wstring& wide)
 #ifdef _WIN32
     WideCharToMultiByte(CP_UTF8, 0, wide.c_str(), -1, str.data(), MAX_PATH, nullptr, nullptr);
 #else
-    size_t size = wide.size();
+    /*size_t size = wide.size();
     char* outbuf = str.data();
     auto inbuf = (char*)wide.data();
     iconv_t cd = iconv_open("utf-8", "utf-16");
     iconv(cd, &inbuf, &size, &outbuf, &size);
-    iconv_close(cd);
+    iconv_close(cd);*/
+    wcstombs(str.data(), wide.c_str(), wide.size());
 #endif
     return str;
 }
