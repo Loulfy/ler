@@ -1,7 +1,8 @@
 //
-// Created by loulfy on "ioring.hpp"
+// Created by loulfy on 07/01/2024.
+//
 
-#include <cstring>
+#include "ioring.hpp"
 
 namespace ler::sys
 {
@@ -18,6 +19,8 @@ static std::string getErrorMsg(HRESULT hr)
     return str;
 }
 #endif
+
+std::mutex IoService::m_tasks_mutex = {};
 
 IoService::IoService(std::shared_ptr<coro::thread_pool>& tp) : m_threadPool(tp)
 {
@@ -39,7 +42,7 @@ IoService::Awaiter IoService::submit(std::vector<FileLoadRequest>& request)
 {
     Awaiter operation;
     operation.service = this;
-    operation.requests = request; //std::move(request);
+    operation.requests = request; // std::move(request);
     return operation;
 }
 
@@ -61,22 +64,27 @@ void IoService::IoBatchRequest::await_suspend(std::coroutine_handle<> handle) no
 void IoService::registerBuffers(std::vector<BufferInfo>& buffers, bool enabled)
 {
     m_useFixedBuffer = enabled;
-    for(const BufferInfo& b : buffers)
+    for (const BufferInfo& b : buffers)
         m_buffers.emplace_back(b.address, b.length);
-    if(enabled)
+    if (enabled)
     {
 #ifdef PLATFORM_WIN
         const int res = BuildIoRingRegisterBuffers(m_ring, m_buffers.size(), m_buffers.data(), 0);
-#else
+#elif PLATFORM_LINUX
         const int res = io_uring_register_buffers(&m_ring, m_buffers.data(), m_buffers.size());
 #endif
-        assert(res == 0);
+        // assert(res == 0);
     }
+}
+
+void cleanup(int error)
+{
+
 }
 
 void IoService::worker(const std::stop_token& stoken)
 {
-#ifdef _WIN32
+#ifdef PLATFORM_WIN
     IORING_CQE cqe;
     IORING_CAPABILITIES capabilities;
     HRESULT res = QueryIoRingCapabilities(&capabilities);
@@ -119,7 +127,7 @@ void IoService::worker(const std::stop_token& stoken)
 
             IORING_HANDLE_REF handleRef(index);
             IORING_BUFFER_REF bufferRef(nullptr);
-            if(m_useFixedBuffer)
+            if (m_useFixedBuffer)
                 bufferRef = IORING_BUFFER_REF(req.buffIndex, req.buffOffset);
             else
             {
@@ -127,7 +135,8 @@ void IoService::worker(const std::stop_token& stoken)
                 bufferRef = IORING_BUFFER_REF(data + req.buffOffset);
             }
 
-            res = BuildIoRingReadFile(m_ring, handleRef, bufferRef, req.fileLength, req.fileOffset, 0, IOSQE_FLAGS_NONE);
+            res =
+                BuildIoRingReadFile(m_ring, handleRef, bufferRef, req.fileLength, req.fileOffset, 0, IOSQE_FLAGS_NONE);
             if (FAILED(res))
             {
                 throw std::runtime_error("[IoRing] Failed building IO ring read file structure: " + getErrorMsg(res));
@@ -148,18 +157,18 @@ void IoService::worker(const std::stop_token& stoken)
 
         m_threadPool->resume(batch.continuation);
     }
-#else
+#elif PLATFORM_LINUX
     int res = io_uring_queue_init(1024, &m_ring, 0);
     assert(res == 0);
 
     IoBatchRequest batch;
     uint32_t submittedEntries;
 
-    ::rlimit limit = { };
+    ::rlimit limit = {};
     getrlimit(RLIMIT_MEMLOCK, &limit);
 
     constexpr static size_t MaxStreamBufferSize = 64u << 20;
-    constexpr static size_t MinStreamBufferSize =  8u << 20;
+    constexpr static size_t MinStreamBufferSize = 8u << 20;
     size_t streamBufferSize = std::min<rlim_t>(limit.rlim_cur / 4, MaxStreamBufferSize);
     bool m_useFixed = streamBufferSize >= MinStreamBufferSize;
 
@@ -194,8 +203,9 @@ void IoService::worker(const std::stop_token& stoken)
             io_uring_sqe* sqe = io_uring_get_sqe(&m_ring);
             sqe->flags = IOSQE_FIXED_FILE;
 
-            if(m_useFixedBuffer)
-                io_uring_prep_read_fixed(sqe, index, data + req.buffOffset, req.fileLength, req.fileOffset, req.buffIndex);
+            if (m_useFixedBuffer)
+                io_uring_prep_read_fixed(sqe, index, data + req.buffOffset, req.fileLength, req.fileOffset,
+                                         req.buffIndex);
             else
                 io_uring_prep_read(sqe, index, data + req.buffOffset, req.fileLength, req.fileOffset);
         }
@@ -203,9 +213,9 @@ void IoService::worker(const std::stop_token& stoken)
         submittedEntries = io_uring_submit_and_wait(&m_ring, m_handles.size());
 
         io_uring_cqe* cqe;
-        for(int i = 0; i < submittedEntries && io_uring_peek_cqe(&m_ring, &cqe) == 0; ++i)
+        for (int i = 0; i < submittedEntries && io_uring_peek_cqe(&m_ring, &cqe) == 0; ++i)
         {
-            if(cqe->res < 0)
+            if (cqe->res < 0)
             {
                 std::string msg = strerror(-cqe->res);
                 throw std::runtime_error("[IoRing] Read request failed: " + msg);
@@ -215,6 +225,44 @@ void IoService::worker(const std::stop_token& stoken)
 
         res = io_uring_unregister_files(&m_ring);
         assert(res == 0);
+
+        m_threadPool->resume(batch.continuation);
+    }
+#elif PLATFORM_MACOS
+    IoBatchRequest batch;
+
+    for (;;)
+    {
+        {
+            std::unique_lock tasks_lock(m_tasks_mutex);
+            m_task_available_cv.wait(tasks_lock, stoken, [&] { return !m_tasks.empty(); });
+
+            if (stoken.stop_requested())
+                return;
+
+            batch = std::move(m_tasks.front());
+            m_tasks.pop();
+        }
+
+        for (const FileLoadRequest& req : batch.requests)
+        {
+            auto* data = static_cast<std::byte*>(m_buffers[req.buffIndex].address);
+
+            aiocb cb = {};
+            cb.aio_nbytes = req.fileLength;
+            cb.aio_offset = req.fileOffset;
+            cb.aio_buf = data + req.buffOffset;
+            cb.aio_fildes = req.file->getNativeHandle();
+            if (aio_read(&cb) < 0)
+                log::error("[AIO] Failed to start aio_read for file '{}': {}", req.file->getPath(), strerror(errno));
+            else
+            {
+                aiocb* cbp = &cb;
+                while(aio_error(&cb) == EINPROGRESS)
+                    aio_suspend(&cbp, 1, nullptr);
+                aio_return(&cb);
+            }
+        }
 
         m_threadPool->resume(batch.continuation);
     }
