@@ -203,6 +203,7 @@ namespace ler::rhi::d3d12
     {
         auto buffer = std::make_shared<Buffer>();
 
+        buffer->format = convertFormatRtv(desc.format);
         buffer->isCBV = desc.isConstantBuffer;
         buffer->desc.Dimension = D3D12_RESOURCE_DIMENSION_BUFFER;
         buffer->desc.Alignment = desc.alignment;

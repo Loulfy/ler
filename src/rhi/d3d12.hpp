@@ -133,6 +133,7 @@ namespace ler::rhi::d3d12
         D3D12MA::ALLOCATION_DESC allocDesc = {};
         DescriptorHeapAllocation clearCpuHandle;
         DescriptorHeapAllocation clearGpuHandle;
+        DXGI_FORMAT format = DXGI_FORMAT_UNKNOWN;
         bool isCBV = false;
         uint32_t stride = 0;
 

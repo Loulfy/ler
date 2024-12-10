@@ -81,17 +81,21 @@ namespace ler::rhi::vulkan
         VmaAllocation allocation = nullptr;
         VmaAllocationCreateInfo allocInfo = {};
         VmaAllocationInfo hostInfo = {};
+        vk::Format format = vk::Format::eUndefined;
 
         ~Buffer() override;
         explicit Buffer(const VulkanContext& context) : m_context(context) { }
         [[nodiscard]] uint32_t sizeBytes() const override { return info.size; }
         [[nodiscard]] bool staging() const override { return allocInfo.flags & VMA_ALLOCATION_CREATE_HOST_ACCESS_SEQUENTIAL_WRITE_BIT; }
+        [[nodiscard]] vk::ArrayProxyNoTemporaries<const vk::BufferView> view();
         void uploadFromMemory(const void* src, uint32_t byteSize) const override;
         void getUint(uint32_t* ptr) const override;
+        void setName(const std::string& debugName);
 
     private:
 
         const VulkanContext& m_context;
+        vk::UniqueBufferView m_view;
     };
 
     struct Texture final : public ITexture
@@ -165,6 +169,7 @@ namespace ler::rhi::vulkan
             vk::DescriptorType::eSampler,
             vk::DescriptorType::eUniformBuffer,
             vk::DescriptorType::eStorageBuffer,
+            vk::DescriptorType::eStorageTexelBuffer
         };
 
         static constexpr std::initializer_list<vk::DescriptorType> kMutable = {

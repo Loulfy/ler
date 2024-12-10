@@ -91,6 +91,7 @@ namespace ler::rhi
         uint32_t byteSize = 0;
         uint32_t alignment = 0;
         uint32_t stride = 0;
+        Format format = Format::UNKNOWN;
         std::string debugName;
 
         bool isUAV = false;

@@ -192,8 +192,8 @@ bool BindlessTable::visitBuffer(const BufferPtr& buffer, uint32_t slot)
         }
         else
         {
-            uavDesc.Format = DXGI_FORMAT_R32_UINT;
-            uavDesc.Buffer.NumElements = buff->sizeBytes()/sizeof(uint32_t);
+            uavDesc.Format = buff->format;
+            uavDesc.Buffer.NumElements = buff->sizeBytes()/4u;
         }
 
         //D3D12_CPU_DESCRIPTOR_HANDLE CPUOnlyHandle = m_heapResCpu->GetCPUDescriptorHandleForHeapStart();

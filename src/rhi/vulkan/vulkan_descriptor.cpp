@@ -188,20 +188,30 @@ bool BindlessTable::visitBuffer(const BufferPtr& buffer, uint32_t slot)
 {
     auto* buff = checked_cast<Buffer*>(buffer.get());
 
-    auto type = vk::DescriptorType::eStorageBuffer;
-
-    vk::DescriptorBufferInfo bufferInfo;
-    bufferInfo.setBuffer(buff->handle);
-    bufferInfo.setRange(VK_WHOLE_SIZE);
-    bufferInfo.setOffset(0);
-
     vk::WriteDescriptorSet descriptorWriteInfo;
+
+    vk::DescriptorType type = vk::DescriptorType::eStorageBuffer;
+    if(buff->info.usage & vk::BufferUsageFlagBits::eUniformBuffer)
+        type = vk::DescriptorType::eUniformBuffer;
+    if(buff->info.usage & vk::BufferUsageFlagBits::eStorageTexelBuffer)
+    {
+        type = vk::DescriptorType::eStorageTexelBuffer;
+        descriptorWriteInfo.setTexelBufferView(buff->view());
+    }
+    else
+    {
+        vk::DescriptorBufferInfo bufferInfo;
+        bufferInfo.setBuffer(buff->handle);
+        bufferInfo.setRange(VK_WHOLE_SIZE);
+        bufferInfo.setOffset(0);
+        descriptorWriteInfo.setBufferInfo(bufferInfo);
+    }
+
     descriptorWriteInfo.setDescriptorType(type);
-    descriptorWriteInfo.setDstBinding(3);
+    descriptorWriteInfo.setDstBinding(0);
     descriptorWriteInfo.setDescriptorCount(1);
     descriptorWriteInfo.setDstSet(m_descriptor);
     descriptorWriteInfo.setDstArrayElement(slot);
-    descriptorWriteInfo.setBufferInfo(bufferInfo);
 
     m_context.device.updateDescriptorSets(descriptorWriteInfo, nullptr);
     return true;

@@ -5,9 +5,9 @@
 #pragma once
 
 #if defined(_WIN32)
-#define PLATFORM_WIN
+#define PLATFORM_WIN 1
 #elif defined(__linux__)
-#define PLATFORM_LINUX
+#define PLATFORM_LINUX 1
 #elif defined(__APPLE__) && defined(__MACH__)
-#define PLATFORM_MACOS
+#define PLATFORM_MACOS 1
 #endif

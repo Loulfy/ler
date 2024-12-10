@@ -353,7 +353,7 @@ namespace ler::rhi::vulkan
         m_context.allocator = allocator;
         m_context.debug = config.debug;
 
-        m_bindlessLayout = BindlessTable::buildBindlessLayout(m_context, 128, false);
+        m_bindlessLayout = BindlessTable::buildBindlessLayout(m_context, 128, vulkanFeatures.mutableDescriptor);
         m_context.bindlessLayout = m_bindlessLayout.get();
 
         m_context.hostBuffer = config.hostBuffer;
@@ -384,7 +384,7 @@ namespace ler::rhi::vulkan
             *ptr = *data;
         }
         else
-            log::error("Failed to upload to buffer");
+            log::error("Failed to read into buffer");
     }
 
     static void aligned_free(void* pMemory)
@@ -505,13 +505,17 @@ namespace ler::rhi::vulkan
     BufferPtr Device::createBuffer(const BufferDesc& desc)
     {
         auto buffer = std::make_shared<Buffer>(m_context);
+        buffer->format = convertFormat(desc.format);
+        vk::FormatProperties p = m_context.physicalDevice.getFormatProperties(buffer->format);
         vk::BufferUsageFlags usageFlags = vk::BufferUsageFlagBits::eTransferSrc | vk::BufferUsageFlagBits::eTransferDst;
         if(desc.isVertexBuffer)
             usageFlags |= vk::BufferUsageFlagBits::eVertexBuffer;
-        if(desc.isIndexBuffer)
+        else if(desc.isIndexBuffer)
             usageFlags |= vk::BufferUsageFlagBits::eIndexBuffer;
-        if(desc.isConstantBuffer)
+        else if(desc.isConstantBuffer)
             usageFlags |= vk::BufferUsageFlagBits::eUniformBuffer;
+        else if(desc.isUAV && p.bufferFeatures & vk::FormatFeatureFlagBits::eStorageTexelBuffer)
+            usageFlags |= vk::BufferUsageFlagBits::eStorageTexelBuffer;
         else
             usageFlags |= vk::BufferUsageFlagBits::eStorageBuffer;
         if(desc.isDrawIndirectArgs)
@@ -528,7 +532,7 @@ namespace ler::rhi::vulkan
 
         log::debug("Create Buffer {} -> {}", desc.debugName, vk::to_string(usageFlags));
         buffer->allocInfo.usage = VMA_MEMORY_USAGE_AUTO;
-        buffer->allocInfo.flags = desc.isStaging ? VMA_ALLOCATION_CREATE_HOST_ACCESS_SEQUENTIAL_WRITE_BIT |
+        buffer->allocInfo.flags = desc.isStaging || desc.isReadBack ? VMA_ALLOCATION_CREATE_HOST_ACCESS_SEQUENTIAL_WRITE_BIT |
                                             VMA_ALLOCATION_CREATE_MAPPED_BIT
                                           : VMA_ALLOCATION_CREATE_DEDICATED_MEMORY_BIT;
 
@@ -543,7 +547,33 @@ namespace ler::rhi::vulkan
                                          reinterpret_cast<VkBuffer*>(&buffer->handle), &buffer->allocation, &buffer->hostInfo);
         }
 
+        buffer->setName(desc.debugName);
         return buffer;
+    }
+
+    vk::ArrayProxyNoTemporaries<const vk::BufferView> Buffer::view()
+    {
+        if(m_view)
+            return m_view.get();
+        vk::BufferViewCreateInfo viewInfo;
+        viewInfo.setBuffer(handle);
+        viewInfo.setFormat(format);
+        viewInfo.setRange(VK_WHOLE_SIZE);
+        viewInfo.setOffset(0);
+        m_view = m_context.device.createBufferViewUnique(viewInfo);
+        return m_view.get();
+    }
+
+    void Buffer::setName(const std::string& debugName)
+    {
+        if(!m_context.debug)
+            return;
+        vk::DebugUtilsObjectNameInfoEXT nameInfo;
+        nameInfo.setObjectType(vk::ObjectType::eBuffer);
+        VkBuffer raw = static_cast<VkBuffer>(handle);
+        nameInfo.setObjectHandle((uint64_t)raw);
+        nameInfo.setPObjectName(debugName.c_str());
+        m_context.device.setDebugUtilsObjectNameEXT(nameInfo);
     }
 
     TexturePtr Device::createTexture(const TextureDesc& desc)

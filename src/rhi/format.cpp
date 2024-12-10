@@ -13,6 +13,8 @@ FormatBlockInfo formatToBlockInfo(Format format)
     switch (format)
     {
     default:
+        log::error("Todo impl format");
+        break;
     case Format::RGBA8_UNORM:
         pFormatSize.blockSizeByte = 4;
         pFormatSize.blockWidth = 1;
