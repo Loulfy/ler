@@ -227,7 +227,7 @@ namespace ler::rhi::d3d12
 
         void markDescriptorHeapIndexing() { m_descriptorHeapIndexing = true; }
         void merge(int type, DescriptorRanges& ranges);
-        void initRootSignature();
+        void initRootSignature(bool indirect = false);
 
         void createDescriptorSet(uint32_t set) override;
         void updateSampler(uint32_t descriptor, uint32_t binding, SamplerPtr& sampler, TexturePtr& texture) override;
@@ -473,7 +473,7 @@ namespace ler::rhi::d3d12
 
         ComPtr<IDXGIFactory6> m_factory;
         ComPtr<IDXGIAdapter1> m_adapter;
-        ComPtr<ID3D12Device> m_device;
+        ComPtr<ID3D12Device9> m_device;
         ComPtr<IDStorageFactory> m_dStorage;
         ComPtr<ID3D12InfoQueue1> m_infoQueue;
         D3D12MA::Allocator* m_allocator = nullptr;

@@ -65,8 +65,8 @@ void MeshBuffers::allocate(const rhi::DevicePtr& device, rhi::BindlessTablePtr& 
         drawMesh.countIndex = mesh.countIndex;
         drawMesh.firstVertex = mesh.firstVertex;
         drawMesh.countVertex = mesh.countVertex;
-        drawMesh.bbMin = glm::vec4(mesh.bbMin, 0.f);
-        drawMesh.bbMax = glm::vec4(mesh.bbMax, 0.f);
+        drawMesh.bbMin = glm::vec4(mesh.bbMin, 1.f);
+        drawMesh.bbMax = glm::vec4(mesh.bbMax, 1.f);
     }
 
     m_drawSkins.resize(materialEntries.size());
@@ -76,7 +76,7 @@ void MeshBuffers::allocate(const rhi::DevicePtr& device, rhi::BindlessTablePtr& 
         DrawSkin& skin = m_drawSkins[i];
 
         skin.textures = glm::uvec4(i, 0.f, 0.f, 0.f);
-        m_files.emplace_back(storage->openFile(sys::ASSETS_DIR / material->diffuse()->string_view()));
+        //m_files.emplace_back(storage->openFile(sys::ASSETS_DIR / material->diffuse()->string_view()));
     }
 
     rhi::BufferDesc meshDesc;

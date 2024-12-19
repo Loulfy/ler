@@ -364,10 +364,11 @@ namespace ler::rhi::vulkan
         auto* buf = checked_cast<Buffer*>(buffer.get());
         ResourceState old_state = buffer->state;
         vk::BufferMemoryBarrier2KHR barrier;
+        QueueType type = QueueType::Graphics;
         barrier.srcAccessMask = util_to_vk_access_flags(old_state);
-        barrier.srcStageMask = util_determine_pipeline_stage_flags2(barrier.srcAccessMask, queueType);
+        barrier.srcStageMask = util_determine_pipeline_stage_flags2(barrier.srcAccessMask, type);
         barrier.dstAccessMask = util_to_vk_access_flags(new_state);
-        barrier.dstStageMask = util_determine_pipeline_stage_flags2(barrier.dstAccessMask, queueType);
+        barrier.dstStageMask = util_determine_pipeline_stage_flags2(barrier.dstAccessMask, type);
         barrier.setSrcQueueFamilyIndex(VK_QUEUE_FAMILY_IGNORED);
         barrier.setDstQueueFamilyIndex(VK_QUEUE_FAMILY_IGNORED);
         barrier.buffer = buf->handle;
@@ -380,7 +381,7 @@ namespace ler::rhi::vulkan
         dependency_info.pBufferMemoryBarriers = &barrier;
 
         cmdBuf.pipelineBarrier2(dependency_info);
-        /*log::debug("[BufferBarrier: {}] srcStage: {}, dstStage {}, srcMask: {}, dstMask: {}", "pouet",
+        /*log::debug("[BufferBarrier: {}] srcStage: {}, dstStage {}, srcMask: {}, dstMask: {}", buf->name,
                    vk::to_string(barrier.srcStageMask), vk::to_string(barrier.dstStageMask),
                    vk::to_string(barrier.srcAccessMask), vk::to_string(barrier.dstAccessMask));*/
     }

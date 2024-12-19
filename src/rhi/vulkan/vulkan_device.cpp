@@ -566,6 +566,7 @@ namespace ler::rhi::vulkan
 
     void Buffer::setName(const std::string& debugName)
     {
+        name = debugName;
         if(!m_context.debug)
             return;
         vk::DebugUtilsObjectNameInfoEXT nameInfo;

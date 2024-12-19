@@ -39,7 +39,7 @@ class CullingCommand : public render::RenderGraphPass
         //cmd->pushConstant(pipeline, rhi::ShaderType::Compute, &test, sizeof(test));
         rhi::BufferPtr countBuffer = render::getBufferOutput(res, 1);
         cmd->fillBuffer(countBuffer, 0);
-        cmd->dispatch(1 + params.meshList->getInstanceCount() / 64, 1, 1);
+        cmd->dispatch(1 + params.meshList->getInstanceCount() / 32, 1, 1);
     }
 
     [[nodiscard]] rhi::PipelinePtr getPipeline() const override

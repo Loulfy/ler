@@ -77,6 +77,7 @@ namespace ler::rhi::vulkan
     struct Buffer final : public IBuffer
     {
         vk::Buffer handle;
+        std::string name;
         vk::BufferCreateInfo info;
         VmaAllocation allocation = nullptr;
         VmaAllocationCreateInfo allocInfo = {};

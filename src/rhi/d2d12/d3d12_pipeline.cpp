@@ -223,7 +223,6 @@ namespace ler::rhi::d3d12
             log::debug("space = {}, register = {}{}, count = {:02}, type = {}", bindDesc.Space, spaceRegister, bindDesc.BindPoint, bindDesc.BindCount, SitToString(bindDesc.Type));
 
             ShaderBindDesc d(rangeType, bindDesc.BindPoint, bindDesc.BindCount, bindDesc.NumSamples, bindDesc.Name);
-            shader->bindingMap.insert({bindDesc.BindPoint, d});
 
             if (rangeType == D3D12_DESCRIPTOR_RANGE_TYPE_SAMPLER)
             {
@@ -235,6 +234,7 @@ namespace ler::rhi::d3d12
                 ID3D12ShaderReflectionConstantBuffer* shaderReflectionConstantBuffer = shaderReflection->GetConstantBufferByIndex(i);
                 D3D12_SHADER_BUFFER_DESC constantBufferDesc{};
                 shaderReflectionConstantBuffer->GetDesc(&constantBufferDesc);
+                d.stride = constantBufferDesc.Size;
 
                 CD3DX12_DESCRIPTOR_RANGE1& range = shader->rangesCbvSrvUav.emplace_back();
                 range.Init(rangeType, bindDesc.BindCount, bindDesc.BindPoint, bindDesc.Space);
@@ -247,6 +247,8 @@ namespace ler::rhi::d3d12
                 else
                     range.Init(rangeType, bindDesc.BindCount, bindDesc.BindPoint, bindDesc.Space, flags);
             }
+
+            shader->bindingMap.insert({bindDesc.BindPoint, d});
         }
 
         return shader;
@@ -265,17 +267,17 @@ namespace ler::rhi::d3d12
         return a.BaseShaderRegister < b.BaseShaderRegister;
     }
 
-    void Pipeline::initRootSignature()
+    void Pipeline::initRootSignature(bool indirect)
     {
         std::vector<CD3DX12_ROOT_PARAMETER1> rootParameters;
         if(m_descriptorHeapIndexing)
         {
-            CD3DX12_ROOT_PARAMETER1& rootParam = rootParameters.emplace_back();
             for(auto& [set, binding] : bindingMap)
             {
+                CD3DX12_ROOT_PARAMETER1& rootParam = rootParameters.emplace_back();
                 if(binding.type == D3D12_DESCRIPTOR_RANGE_TYPE_CBV)
                 {
-                    rootParam.InitAsConstants(33, binding.bindPoint);
+                    rootParam.InitAsConstants(binding.stride/sizeof(uint32_t), binding.bindPoint);
                 }
             }
         }
@@ -314,15 +316,19 @@ namespace ler::rhi::d3d12
         }
         m_context.device->CreateRootSignature(0, signature->GetBufferPointer(), signature->GetBufferSize(), IID_PPV_ARGS(&rootSignature));
 
-        if(m_graphics)
+        if(m_graphics && indirect)
         {
-            D3D12_INDIRECT_ARGUMENT_DESC argumentDesc = {};
-            argumentDesc.Type = D3D12_INDIRECT_ARGUMENT_TYPE_DRAW_INDEXED;
+            D3D12_INDIRECT_ARGUMENT_DESC argumentDesc[2] = {};
+            argumentDesc[0].Type = D3D12_INDIRECT_ARGUMENT_TYPE_CONSTANT;
+            argumentDesc[0].Constant.RootParameterIndex = 1;
+            argumentDesc[0].Constant.Num32BitValuesToSet = 1;
+            argumentDesc[0].Constant.DestOffsetIn32BitValues = 0;
+            argumentDesc[1].Type = D3D12_INDIRECT_ARGUMENT_TYPE_DRAW_INDEXED;
             D3D12_COMMAND_SIGNATURE_DESC commandSignatureDesc = {};
-            commandSignatureDesc.pArgumentDescs = &argumentDesc;
-            commandSignatureDesc.NumArgumentDescs = 1;
-            commandSignatureDesc.ByteStride = 24;
-            m_context.device->CreateCommandSignature(&commandSignatureDesc, nullptr, IID_PPV_ARGS(&commandSignature));
+            commandSignatureDesc.pArgumentDescs = argumentDesc;
+            commandSignatureDesc.NumArgumentDescs = 2;
+            commandSignatureDesc.ByteStride = 28;
+            m_context.device->CreateCommandSignature(&commandSignatureDesc, rootSignature.Get(), IID_PPV_ARGS(&commandSignature));
         }
     }
 
@@ -390,7 +396,7 @@ namespace ler::rhi::d3d12
                 pipeline->m_descriptorHeapIndexing = true;
         }
 
-        pipeline->initRootSignature();
+        pipeline->initRootSignature(desc.indirectDraw);
         pipeline->topology = convertTopology(desc.topology);
 
         // Describe and create the graphics pipeline state objects (PSO).

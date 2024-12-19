@@ -216,6 +216,7 @@ namespace ler::rhi
         float lineWidth = 1.f;
         PipelineRenderingAttachment colorAttach;
         Format depthAttach = Format::D32;
+        bool indirectDraw = false;
     };
 
     struct Attachment

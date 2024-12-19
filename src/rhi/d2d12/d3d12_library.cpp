@@ -166,7 +166,7 @@ void PSOLibrary::build(PsoCache& psoCache)
             graphics = false;
     }
 
-    pipeline->initRootSignature();
+    pipeline->initRootSignature(psoCache.desc.indirectDraw);
     pipeline->topology = Device::convertTopology(psoCache.desc.topology);
 
     std::wstring pipelineName = sys::toUtf16(psoCache.name);

@@ -18,7 +18,7 @@ struct alignas(16) Frustum
 {
     glm::vec4 planes[6];
     glm::vec4 corners[8];
-    glm::uint num;
+    glm::uint num = 0;
 };
 
 struct alignas(16) DrawMesh
@@ -46,11 +46,12 @@ struct alignas(16) DrawInstance
 
 struct DrawCommand
 {
+    glm::uint drawId = 0u;
     glm::uint countIndex = 0u;
     glm::uint instanceCount = 0u;
     glm::uint firstIndex = 0u;
     glm::int32 baseVertex = 0u;
     glm::uint baseInstance = 0u;
-    glm::uint drawId = 0u;
+    glm::uint instId = 0u;
 };
 } // namespace ler::render
