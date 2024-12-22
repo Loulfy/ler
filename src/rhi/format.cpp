@@ -226,7 +226,7 @@ void from_json(const json& j, ShaderModule& s)
         s.entryPoint = j["entryPoint"];
     if (j.contains("stage"))
     {
-        const std::string_view& stage = j["stage"];
+        const std::string& stage = j["stage"];
         if (stage == "Vertex")
             s.stage = ShaderType::Vertex;
         else if (stage == "Pixel")
@@ -236,7 +236,7 @@ void from_json(const json& j, ShaderModule& s)
     }
     if (j.contains("backend"))
     {
-        const std::string_view& backend = j["backend"];
+        const std::string& backend = j["backend"];
         if (backend == "vulkan")
             s.backend = GraphicsAPI::VULKAN;
         else if (backend == "d3d12")
@@ -277,7 +277,7 @@ void from_json(const json& j, PipelineDesc& d)
 {
     if (j.contains("topology"))
     {
-        const std::string_view& primitive = j["topology"];
+        const std::string& primitive = j["topology"];
         if (primitive == "triangleStrip")
             d.topology = PrimitiveType::TriangleStrip;
     }
@@ -286,6 +286,10 @@ void from_json(const json& j, PipelineDesc& d)
         const std::vector<std::string>& colors = j["colors"];
         for (auto& color : colors)
             d.colorAttach.emplace_back(stringToFormat(color));
+    }
+    if(j.contains("indirect"))
+    {
+        d.indirectDraw = j["indirect"].get<bool>();
     }
 }
 
@@ -303,6 +307,7 @@ void to_json(json& j, const PipelineDesc& d)
     }
     j["depth"] = to_string(d.depthAttach);
     j["colors"] = d.colorAttach | std::views::transform([](const Format& f){ return to_string(f); }) | std::ranges::to<std::vector>();
+    j["indirect"] = d.indirectDraw;
 }
 
 void from_json(const json& j, PsoCache& p)
