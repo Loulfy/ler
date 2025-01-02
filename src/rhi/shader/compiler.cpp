@@ -8,7 +8,7 @@
 #ifdef _WIN32
 #include <d3d12shader.h>
 #endif
-#include <dxcapi.h>
+#include <dxc/dxcapi.h>
 #include <fstream>
 
 #include <nlohmann/json.hpp>
@@ -241,7 +241,7 @@ static void compileShaderGlsl(const ShaderModule& shaderModule, const fs::path& 
     controls = static_cast<EShMessages>(controls | EShMsgSpvRules);
     controls = static_cast<EShMessages>(controls | EShMsgKeepUncalled);
     controls = static_cast<EShMessages>(controls | EShMsgVulkanRules | EShMsgSpvRules);
-    shader.setEnvTarget(glslang::EShTargetLanguage::EShTargetSpv, glslang::EShTargetLanguageVersion::EShTargetSpv_1_6);
+    shader.setEnvTarget(glslang::EShTargetLanguage::EShTargetSpv, glslang::EShTargetLanguageVersion::EShTargetSpv_1_5);
     success &= compile(&shader, code, controls, shaderModule.name, shaderModule.entryPoint);
 
     if(!success)
@@ -306,7 +306,7 @@ void IDevice::shaderAutoCompile()
         fs::path f = sys::CACHED_DIR / filename;
         switch (shaderModule.backend)
         {
-
+        case GraphicsAPI::METAL:
         case GraphicsAPI::D3D12:
             f.concat(".cso");
             break;

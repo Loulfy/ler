@@ -44,8 +44,8 @@ class IoService
     struct FileLoadRequest
     {
         ReadOnlyFile* file = nullptr;
-        uint32_t fileLength = 0u;
-        uint32_t fileOffset = 0u;
+        uint64_t fileLength = 0u;
+        uint64_t fileOffset = 0u;
         uint32_t buffOffset = 0u;
         int32_t buffIndex = 0;
     };

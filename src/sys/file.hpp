@@ -4,8 +4,8 @@
 
 #pragma once
 
+#include <vector>
 #include <filesystem>
-#include <memory_resource>
 namespace fs = std::filesystem;
 
 #ifdef _WIN32
@@ -28,7 +28,7 @@ class ReadOnlyFile
 
     static std::vector<ReadOnlyFile*> openFiles(const fs::path& path, const fs::path& ext);
 
-    uint32_t m_size = 0;
+    uint64_t m_size = 0;
 
   private:
     fs::path m_path;

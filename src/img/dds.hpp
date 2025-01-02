@@ -154,7 +154,7 @@ struct DdsTexture : public ITexture
     [[nodiscard]] uint32_t getRowPitch(uint32_t level) const override;
     [[nodiscard]] rhi::Format getFormat() const override;
     [[nodiscard]] std::span<const LevelIndexEntry> levels() const override;
-    [[nodiscard]] uint32_t headOffset() const override;
+    [[nodiscard]] uint64_t headOffset() const override;
     [[nodiscard]] rhi::TextureDesc desc() const override;
     [[nodiscard]] const LevelIndexEntry &tail() const;
     void initFromBuffer(void* data) override;

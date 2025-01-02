@@ -90,7 +90,7 @@ std::span<const ITexture::LevelIndexEntry> KtxTexture::levels() const
     return {levelIndex.data(), levelCount};
 }
 
-uint32_t KtxTexture::headOffset() const
+uint64_t KtxTexture::headOffset() const
 {
     return levelIndex[levelCount - 1].byteOffset;
 }

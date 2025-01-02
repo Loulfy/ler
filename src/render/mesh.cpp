@@ -70,7 +70,7 @@ void MeshBuffers::allocate(const rhi::DevicePtr& device, rhi::BindlessTablePtr& 
     }
 
     m_drawSkins.resize(materialEntries.size());
-    for (size_t i = 0; i < m_drawSkins.size(); ++i)
+    for (uint32_t i = 0; i < m_drawSkins.size(); ++i)
     {
         const scene::Material* material = materialEntries[i];
         DrawSkin& skin = m_drawSkins[i];
@@ -114,7 +114,7 @@ static glm::vec3 toVec3(const scene::Vec3& vec)
 void MeshBuffers::load(const flatbuffers::Vector<const scene::Mesh*>& meshEntries)
 {
     meshCount.fetch_add(meshEntries.size());
-    for (size_t i = 0; i < meshEntries.size(); ++i)
+    for (uint32_t i = 0; i < meshEntries.size(); ++i)
     {
         const scene::Mesh* entry = meshEntries[i];
         meshes[i].countIndex = entry->count_index();
@@ -130,7 +130,7 @@ void MeshBuffers::bind(const rhi::CommandPtr& cmd, bool prePass) const
 {
     size_t n = prePass ? 1 : m_vertexBuffers.size();
     cmd->bindIndexBuffer(m_indexBuffer);
-    for (size_t i = 0; i < n; ++i)
+    for (uint32_t i = 0; i < n; ++i)
         cmd->bindVertexBuffers(i, m_vertexBuffers[i]);
 }
 

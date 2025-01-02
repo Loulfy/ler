@@ -88,7 +88,7 @@ namespace ler::rhi
 
     struct BufferDesc
     {
-        uint32_t byteSize = 0;
+        uint64_t byteSize = 0;
         uint32_t alignment = 0;
         uint32_t stride = 0;
         Format format = Format::UNKNOWN;
@@ -106,9 +106,9 @@ namespace ler::rhi
 
     struct IBuffer : public IResource
     {
-        [[nodiscard]] virtual uint32_t sizeBytes() const = 0;
+        [[nodiscard]] virtual uint64_t sizeBytes() const = 0;
         [[nodiscard]] virtual bool staging() const = 0;
-        virtual void uploadFromMemory(const void* src, uint32_t byteSize) const = 0;
+        virtual void uploadFromMemory(const void* src, uint64_t byteSize) const = 0;
         virtual void getUint(uint32_t* ptr) const = 0;
     };
 
@@ -133,7 +133,7 @@ namespace ler::rhi
         uint32_t depth = 1u;
         uint32_t width = 0u;
         uint32_t height = 0u;
-        uint32_t offset = 0u;
+        uint64_t offset = 0u;
         uint32_t rowPitch = 0u;
     };
 
@@ -307,7 +307,7 @@ namespace ler::rhi
     public:
         virtual ~IReadOnlyFile() = default;
         virtual std::string getFilename() = 0;
-        virtual uint32_t sizeBytes() = 0;
+        virtual uint64_t sizeBytes() = 0;
     };
 
     using ReadOnlyFilePtr = std::shared_ptr<IReadOnlyFile>;
@@ -340,9 +340,9 @@ namespace ler::rhi
         virtual ~IDevice() = default;
 
         // Buffer
-        virtual BufferPtr createBuffer(uint32_t byteSize, bool staging) = 0;
+        virtual BufferPtr createBuffer(uint64_t byteSize, bool staging) = 0;
         virtual BufferPtr createBuffer(const BufferDesc& desc) = 0;
-        virtual BufferPtr createHostBuffer(uint32_t byteSize) = 0;
+        virtual BufferPtr createHostBuffer(uint64_t byteSize) = 0;
 
         // Texture
         virtual TexturePtr createTexture(const TextureDesc& desc) = 0;
@@ -382,7 +382,7 @@ namespace ler::rhi
         virtual ~IRenderPass() = default;
         virtual void create(const DevicePtr& device, const SwapChainPtr& swapChain) = 0;
         virtual void render(TexturePtr& backBuffer, CommandPtr& command) = 0;
-        virtual void begin() {}
+        virtual void begin(TexturePtr& backBuffer) {}
         virtual void resize(const DevicePtr& device, const Extent& viewport) {}
         [[nodiscard]] virtual bool startup() const { return true; }
     };

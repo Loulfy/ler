@@ -258,10 +258,10 @@ namespace ler::rhi::vulkan
             return queueFamily.queueCount > 0 && queueFamily.queueFlags & vk::QueueFlagBits::eGraphics;
         });
 
-        m_graphicsQueueFamily = std::distance(queueFamilies.begin(), family);
+        m_graphicsQueueFamily = static_cast<uint32_t>(std::distance(queueFamilies.begin(), family));
 
         // Find Transfer Queue (for parallel command)
-        for(size_t i = 0; i < queueFamilies.size(); ++i)
+        for(uint32_t i = 0; i < queueFamilies.size(); ++i)
         {
             if(queueFamilies[i].queueCount > 0 && queueFamilies[i].queueFlags & vk::QueueFlagBits::eTransfer && m_graphicsQueueFamily != i)
             {
@@ -368,7 +368,7 @@ namespace ler::rhi::vulkan
         m_library = std::make_shared<PSOLibrary>(this);
     }
 
-    void Buffer::uploadFromMemory(const void* src, uint32_t byteSize) const
+    void Buffer::uploadFromMemory(const void* src, uint64_t byteSize) const
     {
         if (staging() && sizeBytes() >= byteSize)
             std::memcpy(hostInfo.pMappedData, src, byteSize);
@@ -430,7 +430,7 @@ namespace ler::rhi::vulkan
         return idx;
     }
 
-    BufferPtr Device::createHostBuffer(uint32_t byteSize)
+    BufferPtr Device::createHostBuffer(uint64_t byteSize)
     {
         // Fallback to standard staging buffer
         if(m_context.hostBuffer == false)
@@ -478,7 +478,7 @@ namespace ler::rhi::vulkan
         return buffer;
     }
 
-    BufferPtr Device::createBuffer(uint32_t byteSize, bool staging)
+    BufferPtr Device::createBuffer(uint64_t byteSize, bool staging)
     {
         auto buffer = std::make_shared<Buffer>(m_context);
         vk::BufferUsageFlags usageFlags = vk::BufferUsageFlagBits::eTransferSrc | vk::BufferUsageFlagBits::eTransferDst;
@@ -506,7 +506,7 @@ namespace ler::rhi::vulkan
     {
         auto buffer = std::make_shared<Buffer>(m_context);
         buffer->format = convertFormat(desc.format);
-        vk::FormatProperties p = m_context.physicalDevice.getFormatProperties(buffer->format);
+        const vk::FormatProperties p = m_context.physicalDevice.getFormatProperties(buffer->format);
         vk::BufferUsageFlags usageFlags = vk::BufferUsageFlagBits::eTransferSrc | vk::BufferUsageFlagBits::eTransferDst;
         if(desc.isVertexBuffer)
             usageFlags |= vk::BufferUsageFlagBits::eVertexBuffer;
@@ -572,7 +572,7 @@ namespace ler::rhi::vulkan
         vk::DebugUtilsObjectNameInfoEXT nameInfo;
         nameInfo.setObjectType(vk::ObjectType::eBuffer);
         VkBuffer raw = static_cast<VkBuffer>(handle);
-        nameInfo.setObjectHandle((uint64_t)raw);
+        nameInfo.setObjectHandle(reinterpret_cast<uint64_t>(raw));
         nameInfo.setPObjectName(debugName.c_str());
         m_context.device.setDebugUtilsObjectNameEXT(nameInfo);
     }

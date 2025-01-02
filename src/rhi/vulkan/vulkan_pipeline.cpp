@@ -22,7 +22,7 @@ namespace ler::rhi::vulkan
 
     uint32_t guessVertexInputBinding(const char* name)
     {
-        for (size_t i = 0; i < c_VertexAttrMap.size(); ++i)
+        for (uint32_t i = 0; i < c_VertexAttrMap.size(); ++i)
             if (c_VertexAttrMap[i].contains(name))
                 return i;
         throw std::runtime_error("Vertex Input Attribute not reserved");
@@ -350,7 +350,7 @@ namespace ler::rhi::vulkan
         descriptorWriteInfo.setDescriptorType(type.value());
         descriptorWriteInfo.setDstBinding(binding);
         descriptorWriteInfo.setDstSet(d);
-        descriptorWriteInfo.setDescriptorCount(textures.size());
+        descriptorWriteInfo.setDescriptorCount(static_cast<uint32_t>(textures.size()));
 
         for(auto& tex : textures)
         {

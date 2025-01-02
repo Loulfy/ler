@@ -57,7 +57,7 @@ void ImGuiPass::create(const DevicePtr& device, const SwapChainPtr& swapChain)
     ImGui_ImplVulkan_Init(&init_info);
 }
 
-void ImGuiPass::begin()
+void ImGuiPass::begin(TexturePtr& backBuffer)
 {
     ImGui_ImplVulkan_NewFrame();
 }

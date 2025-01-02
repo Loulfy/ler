@@ -45,14 +45,14 @@ ReadOnlyFile::ReadOnlyFile(const fs::path& path) : m_path(path)
     if(m_hFile == -1)
     {
         log::error("[IoRing] Failed to open {}", str);
-        if(errno == ENONET)
+        if(errno == ENOENT)
             log::error("ERROR_FILE_NOT_FOUND");
         if(errno == EPERM)
             log::error("ERROR_NO_PERMISSION");
         if(errno == EISDIR)
             log::error("ERROR_IS_DIR");
     }
-    struct stat st;
+    struct stat st = {};
     stat(str.c_str(), &st);
     m_size = st.st_size;
 #endif

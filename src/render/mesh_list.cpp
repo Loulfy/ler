@@ -48,7 +48,7 @@ const IndexedMesh& RenderMeshList::getMesh(uint32_t id) const
 
 uint32_t RenderMeshList::getInstanceCount() const
 {
-    return m_drawInstances.size();
+    return static_cast<uint32_t>(m_drawInstances.size());
 }
 
 void RenderMeshList::bindVertices(rhi::CommandPtr& cmd)

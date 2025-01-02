@@ -45,7 +45,7 @@ namespace ler::sys
 {
 std::string getHomeDir();
 std::string getCpuName();
-unsigned int getRamCapacity();
+uint64_t getRamCapacity();
 
 static const fs::path ASSETS_DIR = fs::path(PROJECT_DIR) / "assets";
 static const fs::path CACHED_DIR = fs::path("cached");

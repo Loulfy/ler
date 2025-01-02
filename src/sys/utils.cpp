@@ -43,7 +43,7 @@ std::string getHomeDir()
     return {};
 }
 
-unsigned int getRamCapacity()
+uint64_t getRamCapacity()
 {
 #ifdef PLATFORM_WIN
     MEMORYSTATUSEX status;

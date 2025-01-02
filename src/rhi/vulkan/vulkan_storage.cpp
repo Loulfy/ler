@@ -53,7 +53,7 @@ coro::task<> Storage::makeSingleTextureTask(coro::latch& latch, BindlessTablePtr
 
     TextureDesc desc = tex->desc();
     std::span levels = tex->levels();
-    uint32_t head = tex->headOffset();
+    uint64_t head = tex->headOffset();
     desc.debugName = file->getFilename();
     texture = m_device->createTexture(desc);
     uint32_t texId = table->allocate();
@@ -64,7 +64,7 @@ coro::task<> Storage::makeSingleTextureTask(coro::latch& latch, BindlessTablePtr
     request.buffIndex = bufferIndex;
 
     CommandPtr cmd = m_device->createCommand(QueueType::Transfer);
-    for (const size_t mip : std::views::iota(0u, levels.size()))
+    for (const uint32_t mip : std::views::iota(0u, levels.size()))
     {
         const img::ITexture::LevelIndexEntry& level = levels[mip];
         log::info("byteOffset = {}, byteLength = {}", level.byteOffset, level.byteLength);
@@ -104,7 +104,7 @@ coro::task<> Storage::makeMultiTextureTask(coro::latch& latch, BindlessTablePtr 
     for (int i = 0; i < files.size(); ++i)
     {
         queueTexture(files[i], requests[i]);
-        const uint32_t byteSizes = align(files[i]->sizeBytes(), 16u);
+        const uint64_t byteSizes = align(files[i]->sizeBytes(), 16ull);
 
         if (offset + byteSizes > capacity)
         {
@@ -141,7 +141,7 @@ coro::task<> Storage::makeMultiTextureTask(coro::latch& latch, BindlessTablePtr 
         TexturePtr texture = m_device->createTexture(desc);
         table->setResource(texture, texIndex);
 
-        for (const size_t mip : std::views::iota(0u, levels.size()))
+        for (const uint32_t mip : std::views::iota(0u, levels.size()))
         {
             const img::ITexture::LevelIndexEntry& level = levels[mip];
             // log::info("byteOffset = {}, byteLength = {}", level.byteOffset, level.byteLength);

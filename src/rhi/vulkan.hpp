@@ -69,7 +69,7 @@ namespace ler::rhi::vulkan
         VmaAllocator allocator = nullptr;
         vk::PipelineCache pipelineCache;
         vk::DescriptorSetLayout bindlessLayout;
-        uint32_t hostPointerAlignment = 4096u;
+        uint64_t hostPointerAlignment = 4096u;
         bool hostBuffer = true;
         bool debug = false;
     };
@@ -86,10 +86,10 @@ namespace ler::rhi::vulkan
 
         ~Buffer() override;
         explicit Buffer(const VulkanContext& context) : m_context(context) { }
-        [[nodiscard]] uint32_t sizeBytes() const override { return info.size; }
+        [[nodiscard]] uint64_t sizeBytes() const override { return info.size; }
         [[nodiscard]] bool staging() const override { return allocInfo.flags & VMA_ALLOCATION_CREATE_HOST_ACCESS_SEQUENTIAL_WRITE_BIT; }
         [[nodiscard]] vk::ArrayProxyNoTemporaries<const vk::BufferView> view();
-        void uploadFromMemory(const void* src, uint32_t byteSize) const override;
+        void uploadFromMemory(const void* src, uint64_t byteSize) const override;
         void getUint(uint32_t* ptr) const override;
         void setName(const std::string& debugName);
 
@@ -341,7 +341,7 @@ namespace ler::rhi::vulkan
     {
         explicit ReadOnlyFile(const fs::path& path) : handle(path) {}
         std::string getFilename() override { return handle.getPath(); }
-        uint32_t sizeBytes() override { return handle.m_size; }
+        uint64_t sizeBytes() override { return handle.m_size; }
 
         sys::ReadOnlyFile handle;
     };
@@ -374,7 +374,7 @@ namespace ler::rhi::vulkan
       public:
 
         ~ImGuiPass() override;
-        void begin() override;
+        void begin(TexturePtr& backBuffer) override;
         void create(const DevicePtr& device, const SwapChainPtr& swapChain) override;
         void render(TexturePtr& backBuffer, CommandPtr& command) override;
 
@@ -391,9 +391,9 @@ namespace ler::rhi::vulkan
         ~Device() override;
 
         // Buffer
-        BufferPtr createBuffer(uint32_t byteSize, bool staging) override;
+        BufferPtr createBuffer(uint64_t byteSize, bool staging) override;
         BufferPtr createBuffer(const BufferDesc& desc) override;
-        BufferPtr createHostBuffer(uint32_t byteSize) override;
+        BufferPtr createHostBuffer(uint64_t byteSize) override;
 
         // Texture
         TexturePtr createTexture(const TextureDesc& desc) override;

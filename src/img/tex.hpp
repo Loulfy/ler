@@ -25,7 +25,7 @@ class ITexture
     [[nodiscard]] virtual uint32_t getRowPitch(uint32_t level) const = 0;
     [[nodiscard]] virtual rhi::Format getFormat() const = 0;
     [[nodiscard]] virtual std::span<const LevelIndexEntry> levels() const = 0;
-    [[nodiscard]] virtual uint32_t headOffset() const = 0;
+    [[nodiscard]] virtual uint64_t headOffset() const = 0;
     [[nodiscard]] virtual rhi::TextureDesc desc() const = 0;
     virtual void initFromBuffer(void* data) = 0;
 };

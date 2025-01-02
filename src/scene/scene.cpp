@@ -104,8 +104,8 @@ void SceneImporter::prepare(const fs::path& path, const std::string& output)
         return;
     }
 
-    uint32_t indexCount = 0;
-    uint32_t vertexCount = 0;
+    uint64_t indexCount = 0;
+    uint64_t vertexCount = 0;
     std::vector<uint32_t> indices;
     std::vector<aiVector3D> vertices;
     std::vector<meshopt_Meshlet> meshlets;
@@ -197,11 +197,11 @@ void SceneImporter::prepare(const fs::path& path, const std::string& output)
     f.close();
 
     std::vector<Buffer> buffer_vector;
-    uint32_t offset = indexBuffer.size() * sizeof(uint32_t);
-    uint32_t length = vertexBuffers.front().size() * sizeof(aiVector3D);
+    uint64_t offset = indexBuffer.size() * sizeof(uint32_t);
+    uint64_t length = vertexBuffers.front().size() * sizeof(aiVector3D);
     buffer_vector.emplace_back(offset, 0, BufferType_Index);
     for (uint32_t i = 0; i < 4; ++i)
-        buffer_vector.emplace_back(length, offset + length * i, (scene::BufferType)(i + 1));
+        buffer_vector.emplace_back(length, offset + length * i, static_cast<scene::BufferType>(i + 1));
 
     std::vector<Instance> instance_vector;
     processSceneNode(instance_vector, aiScene->mRootNode, aiScene->mMeshes);

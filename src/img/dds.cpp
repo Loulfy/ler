@@ -207,7 +207,7 @@ std::span<const ITexture::LevelIndexEntry> DdsTexture::levels() const
     return { levelIndex.data(), header.mipmapCount };
 }
 
-uint32_t DdsTexture::headOffset() const
+uint64_t DdsTexture::headOffset() const
 {
     return levelIndex[0].byteOffset;
 }
