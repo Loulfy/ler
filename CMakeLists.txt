@@ -9,7 +9,7 @@ find_package(unofficial-spirv-reflect CONFIG REQUIRED)
 find_package(VulkanMemoryAllocator CONFIG REQUIRED)
 find_package(meshoptimizer CONFIG REQUIRED)
 find_package(nlohmann_json CONFIG REQUIRED)
-find_package(directx-dxc CONFIG REQUIRED)
+#find_package(directx-dxc CONFIG REQUIRED)
 find_package(flatbuffers CONFIG REQUIRED)
 find_package(glslang CONFIG REQUIRED)
 find_package(imgui CONFIG REQUIRED)
@@ -106,6 +106,19 @@ if (CMAKE_SYSTEM_NAME STREQUAL "Windows")
         "src/rhi/d2d12/d3d12_library.cpp"
         "src/rhi/d2d12/d3d12_imgui.cpp"
     )
+elseif (CMAKE_SYSTEM_NAME STREQUAL "Darwin")
+    enable_language(OBJCXX)
+    list(APPEND SRC
+        "src/rhi/metal.hpp"
+        "src/rhi/metal/metal_device.cpp"
+        "src/rhi/metal/metal_texture.cpp"
+        "src/rhi/metal/metal_command.cpp"
+        "src/rhi/metal/metal_swapchain.cpp"
+        "src/rhi/metal/metal_glfw.mm"
+        "src/rhi/metal/metal_pipeline.cpp"
+        "src/rhi/metal/metal_imgui.cpp"
+        "src/rhi/metal/metal_imgui.mm"
+    )
 endif()
 
 include_directories(src)
@@ -123,16 +136,16 @@ endif()
 
 flatbuffers_generate_headers(TARGET generated_cppmessages SCHEMAS "res/scene.fbs" FLAGS ${FLATC_CPP_FLAGS})
 
-add_executable(gdev main.cpp editor.hpp ${SRC} ${WIN32_RESOURCES} ${PROTO_SRCS} ${PROTO_HDRS})
+add_executable(gdev main.cpp ${SRC} ${WIN32_RESOURCES} ${PROTO_SRCS} ${PROTO_HDRS})
+add_dependencies(gdev GENERATE_generated_cppmessages)
 target_link_libraries(gdev PRIVATE PkgConfig::Coro)
 target_link_libraries(gdev PRIVATE spdlog::spdlog)
 target_link_libraries(gdev PRIVATE assimp::assimp)
 target_link_libraries(gdev PRIVATE unofficial::spirv-reflect::spirv-reflect)
 target_link_libraries(gdev PRIVATE glslang::OSDependent glslang::glslang glslang::MachineIndependent glslang::GenericCodeGen glslang::glslang-default-resource-limits glslang::OGLCompiler glslang::SPVRemapper glslang::SPIRV glslang::HLSL)
 target_link_libraries(gdev PRIVATE Vulkan::Vulkan GPUOpen::VulkanMemoryAllocator)
-target_link_libraries(gdev PRIVATE Microsoft::DirectXShaderCompiler)
+#target_link_libraries(gdev PRIVATE Microsoft::DirectXShaderCompiler)
 target_include_directories(gdev PRIVATE ${Stb_INCLUDE_DIR})
-target_include_directories(gdev INTERFACE ${CMAKE_CURRENT_BINARY_DIR}/generated_cppmessages)
 target_link_libraries(gdev PRIVATE generated_cppmessages)
 target_link_libraries(gdev PRIVATE flatbuffers::flatbuffers)
 target_link_libraries(gdev PRIVATE nlohmann_json::nlohmann_json)
@@ -153,10 +166,36 @@ if (CMAKE_SYSTEM_NAME STREQUAL "Windows")
 elseif (CMAKE_SYSTEM_NAME STREQUAL "Linux")
     pkg_check_modules(Uring REQUIRED IMPORTED_TARGET liburing)
     target_link_libraries(gdev PRIVATE PkgConfig::Uring)
+elseif (CMAKE_SYSTEM_NAME STREQUAL "Darwin")
+    # Link IRConverter
+    find_library(IRConverter_Path NAMES "libmetalirconverter.dylib")
+    add_library(IRConverter STATIC IMPORTED)
+    set_target_properties(IRConverter PROPERTIES IMPORTED_LOCATION ${IRConverter_Path})
+
+    #Link DXC
+    find_library(DXC_Path NAMES "libdxcompiler.dylib")
+    add_library(DXC STATIC IMPORTED)
+    set_target_properties(DXC PROPERTIES IMPORTED_LOCATION ${DXC_Path})
+    message(WARN ${DXC_Path})
+
+    # Metal cpp library (linker)
+    target_link_libraries(gdev PRIVATE
+            "-framework Metal"
+            "-framework Foundation"
+            "-framework QuartzCore"
+            IRConverter
+            DXC
+    )
+    # Metal cpp headers
+    target_include_directories(gdev PRIVATE "libs/metal-cpp")
+    
+    # Clang option
+    add_compile_options($<$<COMPILE_LANGUAGE:CXX>:-fexperimental-library>)
+    add_compile_options($<$<COMPILE_LANGUAGE:CXX>:-fms-extensions>)
 endif()
 
 add_executable(packer pack.cpp ${SRC_PACKER} ${PROTO_SRCS} ${PROTO_HDRS})
-target_include_directories(packer INTERFACE ${CMAKE_CURRENT_BINARY_DIR}/generated_cppmessages)
+add_dependencies(packer GENERATE_generated_cppmessages)
 target_link_libraries(packer PRIVATE spdlog::spdlog)
 target_link_libraries(packer PRIVATE assimp::assimp)
 target_link_libraries(packer PRIVATE generated_cppmessages)
