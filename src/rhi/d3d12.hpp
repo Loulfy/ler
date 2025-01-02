@@ -138,9 +138,9 @@ namespace ler::rhi::d3d12
         uint32_t stride = 0;
 
         ~Buffer() override { allocation->Release(); }
-        [[nodiscard]] uint32_t sizeBytes() const override { return desc.Width; }
+        [[nodiscard]] uint64_t sizeBytes() const override { return desc.Width; }
         [[nodiscard]] bool staging() const override { return allocDesc.HeapType & D3D12_HEAP_TYPE_UPLOAD; }
-        void uploadFromMemory(const void* src, uint32_t byteSize) const override;
+        void uploadFromMemory(const void* src, uint64_t byteSize) const override;
         void getUint(uint32_t* ptr) const override;
     };
 
@@ -338,7 +338,7 @@ namespace ler::rhi::d3d12
     struct ReadOnlyFile : public IReadOnlyFile
     {
         std::string getFilename() override { return filename; }
-        uint32_t sizeBytes() override {
+        uint64_t sizeBytes() override {
             BY_HANDLE_FILE_INFORMATION info;
             handle->GetFileInformation(&info);
             return info.nFileSizeLow; }
