@@ -11,7 +11,8 @@ namespace ler::rhi
     enum class GraphicsAPI : uint8_t
     {
         D3D12,
-        VULKAN
+        VULKAN,
+        METAL
     };
 
     struct Color
