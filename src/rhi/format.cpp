@@ -15,6 +15,7 @@ FormatBlockInfo formatToBlockInfo(Format format)
     default:
         log::error("Todo impl format");
         break;
+    case Format::R32_UINT:
     case Format::RGBA8_UNORM:
         pFormatSize.blockSizeByte = 4;
         pFormatSize.blockWidth = 1;

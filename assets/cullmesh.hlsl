@@ -72,7 +72,7 @@ void CSMain(uint3 DTid : SV_DispatchThreadID, uint3 GTid : SV_GroupThreadID)
 
         if(WaveIsFirstLane())
         {
-            InterlockedAdd(drawCount[0], drawMeshCount, drawOffset);
+            InterlockedAdd(drawCount[1], drawMeshCount, drawOffset);
         }
 
         GroupMemoryBarrierWithGroupSync();

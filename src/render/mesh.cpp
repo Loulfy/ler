@@ -20,26 +20,31 @@ void MeshBuffers::allocate(const rhi::DevicePtr& device, const flatbuffers::Vect
         {
         case scene::BufferType_Index:
             desc.isIndexBuffer = true;
+            desc.debugName = "IndexBuffer";
             m_indexBuffer = device->createBuffer(desc);
             buffer = m_indexBuffer;
             break;
         case scene::BufferType_Position:
             desc.isVertexBuffer = true;
+            desc.debugName = "PositionBuffer";
             m_vertexBuffers[0] = device->createBuffer(desc);
             buffer = m_vertexBuffers[0];
             break;
         case scene::BufferType_Normal:
             desc.isVertexBuffer = true;
+            desc.debugName = "NormalBuffer";
             m_vertexBuffers[2] = device->createBuffer(desc);
             buffer = m_vertexBuffers[2];
             break;
         case scene::BufferType_Tangent:
             desc.isVertexBuffer = true;
+            desc.debugName = "TangentBuffer";
             m_vertexBuffers[3] = device->createBuffer(desc);
             buffer = m_vertexBuffers[3];
             break;
         case scene::BufferType_Texcoord:
             desc.isVertexBuffer = true;
+            desc.debugName = "TexcoordBuffer";
             m_vertexBuffers[1] = device->createBuffer(desc);
             buffer = m_vertexBuffers[1];
             break;
@@ -128,10 +133,23 @@ void MeshBuffers::load(const flatbuffers::Vector<const scene::Mesh*>& meshEntrie
 
 void MeshBuffers::bind(const rhi::CommandPtr& cmd, bool prePass) const
 {
-    size_t n = prePass ? 1 : m_vertexBuffers.size();
+    const size_t n = prePass ? 1 : m_vertexBuffers.size();
     cmd->bindIndexBuffer(m_indexBuffer);
     for (uint32_t i = 0; i < n; ++i)
         cmd->bindVertexBuffers(i, m_vertexBuffers[i]);
+}
+
+void MeshBuffers::bind(rhi::EncodeIndirectIndexedDrawDesc& drawDesc, bool prePass) const
+{
+    const size_t n = prePass ? 1 : m_vertexBuffers.size();
+    drawDesc.indexBuffer = m_indexBuffer;
+    for (uint32_t i = 0; i < n; ++i)
+        drawDesc.vertexBuffer[i] = m_vertexBuffers[i];
+}
+
+const rhi::BufferPtr& MeshBuffers::getIndexBuffer() const
+{
+    return m_indexBuffer;
 }
 
 const rhi::BufferPtr& MeshBuffers::getMeshBuffer() const

@@ -95,6 +95,8 @@ namespace ler::rhi
         std::string debugName;
 
         bool isUAV = false;
+        bool isICB = false;
+        bool isManaged = false;
         bool isStaging = false;
         bool isReadBack = false;
         bool isVertexBuffer = false;
@@ -135,6 +137,7 @@ namespace ler::rhi
         uint32_t height = 0u;
         uint64_t offset = 0u;
         uint32_t rowPitch = 0u;
+        uint64_t slicePitch = 0u;
     };
 
     struct TextureDesc
@@ -253,26 +256,40 @@ namespace ler::rhi
         std::vector<ShaderModule> modules;
     };
 
+    struct EncodeIndirectIndexedDrawDesc
+    {
+        BufferPtr drawsBuffer;
+        BufferPtr countBuffer;
+        BufferPtr constantBuffer;
+        BufferPtr indexBuffer;
+        std::array<BufferPtr, 4> vertexBuffer;
+        BindlessTablePtr table;
+        uint32_t maxDrawCount = 0;
+    };
+
     class ICommand
     {
     public:
         virtual ~ICommand() = default;
         virtual void reset() = 0;
         virtual void bindPipeline(const PipelinePtr& pipeline, uint32_t descriptorHandle) const = 0;
-        virtual void bindPipeline(const PipelinePtr& pipeline, const BindlessTablePtr& table) const = 0;
-        virtual void pushConstant(const PipelinePtr& pipeline, ShaderType stage, const void* data, uint8_t size) const = 0;
+        virtual void bindPipeline(const PipelinePtr& pipeline, const BindlessTablePtr& table) = 0;
+        virtual void setConstant(const BufferPtr& buffer, ShaderType stage) = 0;
+        virtual void pushConstant(const PipelinePtr& pipeline, ShaderType stage, uint32_t slot, const void* data, uint8_t size) = 0;
         virtual void drawIndexed(uint32_t vertexCount) const = 0;
         virtual void drawIndexedInstanced(uint32_t indexCount, uint32_t firstIndex, int32_t firstVertex, uint32_t firstId) const = 0;
-        virtual void drawIndirectIndexed(const PipelinePtr& pipeline, const BufferPtr& commands, const BufferPtr& count, uint32_t maxDrawCount, uint32_t stride) const = 0;
-        virtual void dispatch(uint32_t x, uint32_t y, uint32_t z) const = 0;
+        virtual void encodeIndirectIndexed(const EncodeIndirectIndexedDrawDesc& desc) = 0;
+        virtual void drawIndirectIndexed(const PipelinePtr& pipeline, const BufferPtr& commands, const BufferPtr& count, uint32_t maxDrawCount, uint32_t stride) = 0;
+        virtual void dispatch(uint32_t x, uint32_t y, uint32_t z) = 0;
         virtual void endRendering() const = 0;
-        virtual void beginRendering(const RenderingInfo& renderingInfo) const = 0;
+        virtual void beginRendering(const RenderingInfo& renderingInfo) = 0;
         virtual void beginRendering(const PipelinePtr& pipeline, TexturePtr& backBuffer) = 0;
         virtual void addImageBarrier(const TexturePtr& texture, ResourceState new_state) const = 0;
         virtual void addBufferBarrier(const BufferPtr& buffer, ResourceState new_state) const = 0;
         virtual void clearColorImage(const TexturePtr& texture, const std::array<float,4>& color) const = 0;
         virtual void copyBufferToTexture(const BufferPtr& buffer, const TexturePtr& texture, const Subresource& sub, const unsigned char* pSrcData) const = 0;
         virtual void copyBuffer(const BufferPtr& src, const BufferPtr& dst, uint64_t byteSize, uint64_t dstOffset) = 0;
+        virtual void syncBuffer(const BufferPtr& dst, const void* src, uint64_t byteSize) = 0;
         virtual void fillBuffer(const BufferPtr& dst, uint32_t value) const = 0;
         virtual void bindIndexBuffer(const BufferPtr& indexBuffer) = 0;
         virtual void bindVertexBuffers(uint32_t slot, const BufferPtr& indexBuffer) = 0;

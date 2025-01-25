@@ -26,6 +26,10 @@ pkg_check_modules(Coro REQUIRED IMPORTED_TARGET libcoro)
 
 add_definitions(-DPROJECT_DIR=\"${PROJECT_SOURCE_DIR}\")
 
+# Clang option
+add_compile_options($<$<COMPILE_LANGUAGE:CXX>:-fexperimental-library>)
+add_compile_options($<$<COMPILE_LANGUAGE:CXX>:-fms-extensions>)
+
 set(SRC
     "src/log/log.hpp"
     "src/rhi/ref.hpp"
@@ -111,9 +115,12 @@ elseif (CMAKE_SYSTEM_NAME STREQUAL "Darwin")
     list(APPEND SRC
         "src/rhi/metal.hpp"
         "src/rhi/metal/metal_device.cpp"
+        "src/rhi/metal/metal_format.cpp"
+        "src/rhi/metal/metal_runtime.cpp"
         "src/rhi/metal/metal_texture.cpp"
-        "src/rhi/metal/metal_command.cpp"
         "src/rhi/metal/metal_swapchain.cpp"
+        "src/rhi/metal/metal_command.cpp"
+        "src/rhi/metal/metal_storage.cpp"
         "src/rhi/metal/metal_glfw.mm"
         "src/rhi/metal/metal_pipeline.cpp"
         "src/rhi/metal/metal_imgui.cpp"
@@ -122,6 +129,9 @@ elseif (CMAKE_SYSTEM_NAME STREQUAL "Darwin")
 endif()
 
 include_directories(src)
+
+set($ENV{MTL_DEBUG_LAYER} "1")
+set($ENV{MTL_SHADER_VALIDATION_REPORT_TO_STDERR} 1)
 
 if (CMAKE_SYSTEM_NAME STREQUAL "Windows")
     find_package(d3d12-memory-allocator CONFIG REQUIRED)
@@ -168,15 +178,14 @@ elseif (CMAKE_SYSTEM_NAME STREQUAL "Linux")
     target_link_libraries(gdev PRIVATE PkgConfig::Uring)
 elseif (CMAKE_SYSTEM_NAME STREQUAL "Darwin")
     # Link IRConverter
-    find_library(IRConverter_Path NAMES "libmetalirconverter.dylib")
+    find_library(IRConverter_Path NAMES "metalirconverter")
     add_library(IRConverter STATIC IMPORTED)
     set_target_properties(IRConverter PROPERTIES IMPORTED_LOCATION ${IRConverter_Path})
 
     #Link DXC
-    find_library(DXC_Path NAMES "libdxcompiler.dylib")
+    find_library(DXC_Path NAMES "dxcompiler")
     add_library(DXC STATIC IMPORTED)
     set_target_properties(DXC PROPERTIES IMPORTED_LOCATION ${DXC_Path})
-    message(WARN ${DXC_Path})
 
     # Metal cpp library (linker)
     target_link_libraries(gdev PRIVATE
@@ -188,10 +197,6 @@ elseif (CMAKE_SYSTEM_NAME STREQUAL "Darwin")
     )
     # Metal cpp headers
     target_include_directories(gdev PRIVATE "libs/metal-cpp")
-    
-    # Clang option
-    add_compile_options($<$<COMPILE_LANGUAGE:CXX>:-fexperimental-library>)
-    add_compile_options($<$<COMPILE_LANGUAGE:CXX>:-fms-extensions>)
 endif()
 
 add_executable(packer pack.cpp ${SRC_PACKER} ${PROTO_SRCS} ${PROTO_HDRS})

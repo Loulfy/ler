@@ -34,6 +34,7 @@ class MeshBuffers
     void allocate(const rhi::DevicePtr& device, rhi::BindlessTablePtr& table, const flatbuffers::Vector<flatbuffers::Offset<scene::Material>>& materialEntries);
     void load(const flatbuffers::Vector<const scene::Mesh*>& meshEntries);
     void bind(const rhi::CommandPtr& cmd, bool prePass) const;
+    void bind(rhi::EncodeIndirectIndexedDrawDesc& drawDesc, bool prePass) const;
 
     static constexpr uint32_t kMaxMesh = 2048;
     static constexpr uint32_t kShaderGroupSizeNV = 32;
@@ -42,6 +43,7 @@ class MeshBuffers
 
     //[[nodiscard]] const BufferPtr& getVertexBuffer() const;
     //[[nodiscard]] const BufferPtr& getIndexBuffer() const;
+    [[nodiscard]] const rhi::BufferPtr& getIndexBuffer() const;
     [[nodiscard]] const rhi::BufferPtr& getMeshBuffer() const;
     [[nodiscard]] const rhi::BufferPtr& getSkinBuffer() const;
     [[nodiscard]] uint32_t getMeshCount() const;

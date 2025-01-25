@@ -26,11 +26,17 @@ void ImGuiPass::begin(TexturePtr& backBuffer)
 {
     const auto* img = checked_cast<Texture*>(backBuffer.get());
 
+    RenderingInfo pass;
+    pass.viewport = backBuffer->extent();
+    pass.colors[0].texture = backBuffer;
+    pass.colors[0].loadOp = AttachmentLoadOp::Load;
+    pass.colorCount = 1;
+
     m_renderPassDescriptor = MTL::RenderPassDescriptor::alloc()->init();
     MTL::RenderPassColorAttachmentDescriptor* cd = m_renderPassDescriptor->colorAttachments()->object(0);
     cd->setTexture(img->handle);
-    cd->setLoadAction(MTL::LoadActionClear);
-    cd->setClearColor(MTL::ClearColor(41.0f/255.0f, 42.0f/255.0f, 48.0f/255.0f, 1.0));
+    cd->setLoadAction(MTL::LoadActionLoad);
+    //cd->setClearColor(MTL::ClearColor(41.0f/255.0f, 42.0f/255.0f, 48.0f/255.0f, 1.0));
     cd->setStoreAction(MTL::StoreActionStore);
 
     ImGui_ImplMetal_NewFrame(m_renderPassDescriptor);
@@ -38,8 +44,8 @@ void ImGuiPass::begin(TexturePtr& backBuffer)
     ImGui_ImplGlfw_NewFrame();
     ImGui::NewFrame();
 
-    bool show_demo_window = true;
-    ImGui::ShowDemoWindow(&show_demo_window);
+    //bool show_demo_window = true;
+    //ImGui::ShowDemoWindow(&show_demo_window);
 }
 
 void ImGuiPass::render(TexturePtr& backBuffer, CommandPtr& command)
@@ -48,22 +54,19 @@ void ImGuiPass::render(TexturePtr& backBuffer, CommandPtr& command)
     // Record dear ImGui primitives into command buffer
     ImDrawData* draw_data = ImGui::GetDrawData();
 
-    RenderingInfo pass;
-    pass.viewport = backBuffer->extent();
-    pass.colors[0].texture = backBuffer;
-    pass.colors[0].loadOp = AttachmentLoadOp::Load;
-    pass.colorCount = 1;
-
     auto* cmd = checked_cast<Command*>(command.get());
 
-
+    //cmd->cmdBuf->pushDebugGroup(NS::String::string("ImGuiPass", NS::StringEncoding::UTF8StringEncoding));
     MTL::RenderCommandEncoder* renderCommandEncoder = cmd->cmdBuf->renderCommandEncoder(m_renderPassDescriptor);
 
-    command->beginDebugEvent("ImGuiPass", Color::Red);
-    command->beginRendering(pass);
+    //command->beginDebugEvent("ImGuiPass", Color::Red);
+    //command->beginRendering(pass);
+    //renderCommandEncoder->pushDebugGroup(NS::String::string("ImGuiPass", NS::StringEncoding::UTF8StringEncoding));
     ImGui_ImplMetal_RenderDrawData(draw_data, cmd->cmdBuf, renderCommandEncoder);
+    //renderCommandEncoder->popDebugGroup();
     renderCommandEncoder->endEncoding();
-    command->endRendering();
-    command->endDebugEvent();
+    //cmd->cmdBuf->popDebugGroup();
+    //command->endRendering();
+    //command->endDebugEvent();
 }
 } // namespace ler::rhi::metal

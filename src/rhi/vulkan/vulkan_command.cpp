@@ -423,6 +423,11 @@ namespace ler::rhi::vulkan
         cmdBuf.copyBuffer(buffSrc->handle, buffDst->handle, 1, &copyRegion);
     }
 
+    void Command::syncBuffer(const BufferPtr& dst, const void* src, uint64_t byteSize)
+    {
+        //TODO: IMPL ASAP
+    }
+
     void Command::fillBuffer(const BufferPtr& dst, uint32_t value) const
     {
         auto* buff = checked_cast<Buffer*>(dst.get());
@@ -453,7 +458,7 @@ namespace ler::rhi::vulkan
         cmdBuf.drawIndexed(indexCount, 1, firstIndex, firstVertex, firstId);
     }
 
-    void Command::drawIndirectIndexed(const rhi::PipelinePtr&, const BufferPtr& commands, const BufferPtr& count, uint32_t maxDrawCount, uint32_t stride) const
+    void Command::drawIndirectIndexed(const rhi::PipelinePtr&, const BufferPtr& commands, const BufferPtr& count, uint32_t maxDrawCount, uint32_t stride)
     {
         constexpr static vk::DeviceSize offset = 0;
         auto* drawsBuff = checked_cast<Buffer*>(commands.get());
@@ -461,7 +466,12 @@ namespace ler::rhi::vulkan
         cmdBuf.drawIndexedIndirectCount(drawsBuff->handle, offset, countBuff->handle, offset, maxDrawCount, stride);
     }
 
-    void Command::dispatch(uint32_t x, uint32_t y, uint32_t z) const
+    void Command::encodeIndirectIndexed(const EncodeIndirectIndexedDrawDesc& desc)
+    {
+        // Compatibility with METAL, not needed!
+    }
+
+    void Command::dispatch(uint32_t x, uint32_t y, uint32_t z)
     {
         cmdBuf.dispatch(x, y, z);
     }
@@ -478,7 +488,7 @@ namespace ler::rhi::vulkan
         cmdBuf.bindDescriptorSets(native->bindPoint, native->pipelineLayout.get(), 0, native->getDescriptorSet(descriptorHandle), nullptr);
     }
 
-    void Command::bindPipeline(const rhi::PipelinePtr& pipeline, const BindlessTablePtr& table) const
+    void Command::bindPipeline(const rhi::PipelinePtr& pipeline, const BindlessTablePtr& table)
     {
         auto* native = checked_cast<BasePipeline*>(pipeline.get());
         cmdBuf.bindPipeline(native->bindPoint, native->handle.get());
@@ -503,14 +513,19 @@ namespace ler::rhi::vulkan
         }
     }
 
-    void Command::pushConstant(const rhi::PipelinePtr& pipeline, ShaderType stage, const void* data, uint8_t size) const
+    void Command::setConstant(const BufferPtr& buffer, ShaderType stage)
+    {
+
+    }
+
+    void Command::pushConstant(const rhi::PipelinePtr& pipeline, ShaderType stage, uint32_t slot, const void* data, uint8_t size)
     {
         assert(size <= 128);
         auto* native = checked_cast<BasePipeline*>(pipeline.get());
         cmdBuf.pushConstants(native->pipelineLayout.get(), convertShaderStage(stage), 0, size, data);
     }
 
-    void Command::beginRendering(const RenderingInfo& renderingInfo) const
+    void Command::beginRendering(const RenderingInfo& renderingInfo)
     {
         vk::RenderingInfo renderInfo;
         vk::RenderingAttachmentInfo depthAttachment;

@@ -6,6 +6,8 @@
 #include "desktop.hpp"
 #ifdef PLATFORM_WIN
 #include "rhi/d3d12.hpp"
+#elif PLATFORM_MACOS
+#include "rhi/metal.hpp"
 #endif
 #include "rhi/vulkan.hpp"
 #include "img/loader.hpp"
@@ -21,7 +23,7 @@ namespace ler::app
         log::setup(log::level::debug);
         log::info("LER DesktopApp Init");
         log::info("CPU: {}, {} Threads", sys::getCpuName(), std::thread::hardware_concurrency());
-        log::info("RAM: {} Go", sys::getRamCapacity()/1024);
+        log::info("RAM: {} Go", std::ceil(static_cast<float>(sys::getRamCapacity())/1024.f));
 
         if (!glfwInit())
             log::exit("Failed to init glfw");
@@ -57,6 +59,9 @@ namespace ler::app
             log::exit("D3D12 Not compatible");
 #endif
 
+        if(cfg.api == rhi::GraphicsAPI::METAL)
+            m_device = rhi::metal::CreateDevice(devConfig);
+
         m_device->shaderAutoCompile();
         m_swapChain = m_device->createSwapChain(m_window, cfg.vsync);
         m_camera = std::make_shared<cam::Camera>();
@@ -91,11 +96,14 @@ namespace ler::app
 
     void DesktopApp::resize(int width, int height)
     {
+        ImGuiIO& io = ImGui::GetIO();
+        io.DisplaySize = ImVec2(static_cast<float>(width), static_cast<float>(height));
+
         m_swapChain->resize(width, height, true);
         notifyResize();
     }
 
-    struct EmptyMeshRenderer : public render::IMeshRenderer
+    struct EmptyMeshRenderer final : public render::IMeshRenderer
     {
       public:
         void create(const rhi::DevicePtr& device, const rhi::SwapChainPtr& swapChain, const render::RenderParams& params) override
@@ -113,11 +121,17 @@ namespace ler::app
             ImGui_ImplGlfw_InitForVulkan(m_window, true);
             addPass<rhi::vulkan::ImGuiPass>();
         }
-    #ifdef PLATFORM_WIN
-        else
+    #if defined(PLATFORM_WIN)
+        else if (m_device->getGraphicsAPI() == rhi::GraphicsAPI::D3D12)
         {
             ImGui_ImplGlfw_InitForOther(m_window, true);
             addPass<rhi::d3d12::ImGuiPass>();
+        }
+    #elif defined(PLATFORM_MACOS)
+        else if (m_device->getGraphicsAPI() == rhi::GraphicsAPI::METAL)
+        {
+            ImGui_ImplGlfw_InitForOther(m_window, true);
+            addPass<rhi::metal::ImGuiPass>();
         }
     #endif
 
@@ -155,14 +169,11 @@ namespace ler::app
             params.proj = m_camera->getProjMatrix();
             params.view = m_camera->getViewMatrix();
 
-            for (const auto& pass : m_renderPasses)
-                pass->begin();
-
-            ImGui_ImplGlfw_NewFrame();
-            ImGui::NewFrame();
+            //for (const auto& pass : m_renderPasses)
+                //pass->begin();
 
             m_swapChain->present([&](rhi::TexturePtr& backBuffer, rhi::CommandPtr& command){
-                command->addImageBarrier(backBuffer, rhi::RenderTarget);
+                /*command->addImageBarrier(backBuffer, rhi::RenderTarget);
                 for (int i = 0; i < m_renderPasses.size(); ++i)
                 {
                     const auto& pass = m_renderPasses[i];
@@ -172,7 +183,23 @@ namespace ler::app
                         m_renderPasses[i]->render(backBuffer, command);
                     }
                 }
-                command->addImageBarrier(backBuffer, rhi::Present);
+                command->addImageBarrier(backBuffer, rhi::Present);*/
+
+                for (const auto& pass : m_renderPasses)
+                    pass->begin(backBuffer);
+
+                /*for (const auto& pass : m_renderPasses)
+                    pass->render(backBuffer, command);*/
+
+                for (int i = 0; i < m_renderPasses.size(); ++i)
+                {
+                    const auto& pass = m_renderPasses[i];
+                    if(pass->startup())
+                    {
+                        m_meshRenderer[i]->render(backBuffer, command, params);
+                        m_renderPasses[i]->render(backBuffer, command);
+                    }
+                }
             });
 
             m_device->runGarbageCollection();

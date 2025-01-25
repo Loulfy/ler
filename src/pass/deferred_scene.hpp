@@ -176,7 +176,7 @@ class DeferredScene final : public rhi::IRenderPass, public render::IMeshRendere
         command->addBufferBarrier(m_frustumBuffer, rhi::ConstantBuffer);
 
         command->bindPipeline(m_cullPass, m_table);
-        command->pushConstant(m_cullPass, rhi::ShaderType::Compute, &m_cullRes, sizeof(CullResource));
+        command->pushConstant(m_cullPass, rhi::ShaderType::Compute, 0, &m_cullRes, sizeof(CullResource));
         command->dispatch(1 + params.meshList->getInstanceCount() / 32, 1, 1);
 
         command->addBufferBarrier(m_countBuffer, rhi::CopySrc);
@@ -198,7 +198,7 @@ class DeferredScene final : public rhi::IRenderPass, public render::IMeshRendere
         data.bound = m_cullRes.propIndex;
 
         command->bindPipeline(m_wirePass, m_table);
-        command->pushConstant(m_wirePass, rhi::ShaderType::Vertex, &data, sizeof(test));
+        command->pushConstant(m_wirePass, rhi::ShaderType::Vertex, 0, &data, sizeof(test));
 
         pass.colors[0].texture = backBuffer;
         command->beginRendering(pass);

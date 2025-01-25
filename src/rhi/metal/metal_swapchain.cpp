@@ -24,6 +24,7 @@ SwapChainPtr Device::createSwapChain(GLFWwindow* window, bool vsync)
     swapChain->layer->setFramebufferOnly(true);
     addLayerToWindow(window, swapChain->layer.get());
     swapChain->createNativeSync();
+    swapChain->resize(width, height, vsync);
 
     return swapChain;
 }
@@ -51,6 +52,11 @@ Extent SwapChain::extent() const
 {
     const CGSize size = layer->drawableSize();
     return {static_cast<uint32_t>(size.width), static_cast<uint32_t>(size.height)};
+}
+
+Format SwapChain::format() const
+{
+    return Device::reverseFormat(layer->pixelFormat());
 }
 
 uint32_t SwapChain::present(const RenderPass& renderPass)

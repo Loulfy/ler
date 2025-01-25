@@ -17,6 +17,8 @@ class CommonBindlessTable : public IBindlessTable
     [[nodiscard]] TexturePtr getTexture(uint32_t slot) const override;
     [[nodiscard]] BufferPtr getBuffer(uint32_t slot) const override;
 
+    [[nodiscard]] uint32_t getResourceCount() const { return m_textureCount; }
+
     static constexpr uint32_t kBindlessMax = 1024;
 
     virtual bool visitTexture(const TexturePtr& texture, uint32_t slot) = 0;
