@@ -158,7 +158,7 @@ namespace ler::rhi::vulkan
 
     Device::Device(const DeviceConfig& config)
     {
-        static const vk::DynamicLoader dl;
+        static const vk::detail::DynamicLoader dl;
         const auto vkGetInstanceProcAddr = dl.getProcAddress<PFN_vkGetInstanceProcAddr>("vkGetInstanceProcAddr");
         VULKAN_HPP_DEFAULT_DISPATCHER.init(vkGetInstanceProcAddr);
 

@@ -189,6 +189,7 @@ bool BindlessTable::visitBuffer(const BufferPtr& buffer, uint32_t slot)
     auto* buff = checked_cast<Buffer*>(buffer.get());
 
     vk::WriteDescriptorSet descriptorWriteInfo;
+    vk::DescriptorBufferInfo bufferInfo;
 
     vk::DescriptorType type = vk::DescriptorType::eStorageBuffer;
     if(buff->info.usage & vk::BufferUsageFlagBits::eUniformBuffer)
@@ -200,7 +201,6 @@ bool BindlessTable::visitBuffer(const BufferPtr& buffer, uint32_t slot)
     }
     else
     {
-        vk::DescriptorBufferInfo bufferInfo;
         bufferInfo.setBuffer(buff->handle);
         bufferInfo.setRange(VK_WHOLE_SIZE);
         bufferInfo.setOffset(0);
