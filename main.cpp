@@ -330,11 +330,12 @@ class TestIndirect final : public rhi::IRenderPass, public render::IMeshRenderer
         staging->uploadFromMemory(&f, sizeof(render::Frustum));
         command->addBufferBarrier(frustBuffer, rhi::CopyDest);
         command->copyBuffer(staging, frustBuffer, sizeof(render::Frustum), 0);
-        command->syncBuffer(cullConstant, &cullRes, sizeof(CullIndex));
+        //command->syncBuffer(cullConstant, &cullRes, sizeof(CullIndex));
+        cullConstant->uploadFromMemory(&cullRes, sizeof(CullIndex));
 
         command->bindPipeline(cullPass, table);
-        //command->pushConstant(cullPass, rhi::ShaderType::Compute, 0, &cullRes, sizeof(CullIndex));
-        command->setConstant(cullConstant, rhi::ShaderType::Compute);
+        command->pushConstant(cullPass, rhi::ShaderType::Compute, 0, &cullRes, sizeof(CullIndex));
+        //command->setConstant(cullConstant, rhi::ShaderType::Compute);
 
         // drawsBuff + ICB
         // index
@@ -342,8 +343,8 @@ class TestIndirect final : public rhi::IRenderPass, public render::IMeshRenderer
         // constant address
         // descHeap
 
-        //command->addBufferBarrier(meshList.getInstanceBuffer(), rhi::ShaderResource);
-        //command->addBufferBarrier(meshBuffers.getMeshBuffer(), rhi::ShaderResource);
+        command->addBufferBarrier(meshList.getInstanceBuffer(), rhi::ShaderResource);
+        command->addBufferBarrier(meshBuffers.getMeshBuffer(), rhi::ShaderResource);
         command->addBufferBarrier(frustBuffer, rhi::ConstantBuffer);
         command->addBufferBarrier(countBuffer, rhi::UnorderedAccess);
         command->addBufferBarrier(drawsBuffer, rhi::UnorderedAccess);
@@ -362,7 +363,8 @@ class TestIndirect final : public rhi::IRenderPass, public render::IMeshRenderer
         render::DrawConstant data;
         data.proj = params.proj;
         data.view = params.view;
-        command->syncBuffer(drawConstant, &data, sizeof(render::DrawConstant));
+        //command->syncBuffer(drawConstant, &data, sizeof(render::DrawConstant));
+        drawConstant->uploadFromMemory(&data, sizeof(render::DrawConstant));
 
         rhi::EncodeIndirectIndexedDrawDesc encoder;
         meshBuffers.bind(encoder, true);
@@ -375,7 +377,8 @@ class TestIndirect final : public rhi::IRenderPass, public render::IMeshRenderer
 
         command->beginRendering(pass);
         command->bindPipeline(pipeline, table);
-        command->setConstant(drawConstant, rhi::ShaderType::Vertex);
+        //command->setConstant(drawConstant, rhi::ShaderType::Vertex);
+        command->pushConstant(pipeline, rhi::ShaderType::Vertex, 0, &data, sizeof(render::DrawConstant));
         meshBuffers.bind(command, true);
 
         /*for(uint32_t i = 0; i < meshList.getInstanceCount(); ++i)
@@ -404,6 +407,7 @@ class TestIndirect final : public rhi::IRenderPass, public render::IMeshRenderer
         buffDesc.debugName = "frustBuffer";
         buffDesc.stride = sizeof(render::Frustum);
         buffDesc.byteSize = sizeof(render::Frustum);
+        buffDesc.isConstantBuffer = true;
         frustBuffer = device->createBuffer(buffDesc);
 
         staging = device->createBuffer(buffDesc.byteSize, true);
@@ -411,6 +415,7 @@ class TestIndirect final : public rhi::IRenderPass, public render::IMeshRenderer
         std::array<uint32_t, 64> values = {};
         values.fill(1);
         values[0] = 0;
+        values[1] = 0;
         clearer->uploadFromMemory(values.data(), 256);
         rhi::BufferDesc rDesc;
         rDesc.isReadBack = true;
@@ -441,7 +446,9 @@ class TestIndirect final : public rhi::IRenderPass, public render::IMeshRenderer
 
         buffDesc.format = rhi::Format::UNKNOWN;
         buffDesc.debugName = "drawConstant";
-        buffDesc.isManaged = true;
+        //buffDesc.isManaged = true;
+        buffDesc.isUAV = false;
+        buffDesc.isStaging = true;
         buffDesc.stride = sizeof(render::DrawConstant);
         buffDesc.byteSize = sizeof(render::DrawConstant);
         drawConstant = device->createBuffer(buffDesc);

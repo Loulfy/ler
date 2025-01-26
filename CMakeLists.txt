@@ -26,9 +26,11 @@ pkg_check_modules(Coro REQUIRED IMPORTED_TARGET libcoro)
 
 add_definitions(-DPROJECT_DIR=\"${PROJECT_SOURCE_DIR}\")
 
+if (CMAKE_SYSTEM_NAME STREQUAL "Darwin")
 # Clang option
 add_compile_options($<$<COMPILE_LANGUAGE:CXX>:-fexperimental-library>)
 add_compile_options($<$<COMPILE_LANGUAGE:CXX>:-fms-extensions>)
+endif ()
 
 set(SRC
     "src/log/log.hpp"

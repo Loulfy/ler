@@ -60,7 +60,11 @@ namespace ler::app
 #endif
 
         if(cfg.api == rhi::GraphicsAPI::METAL)
+#ifdef PLATFORM_MACOS
             m_device = rhi::metal::CreateDevice(devConfig);
+#else
+            log::exit("METAL Not compatible");
+#endif
 
         m_device->shaderAutoCompile();
         m_swapChain = m_device->createSwapChain(m_window, cfg.vsync);
@@ -185,6 +189,7 @@ namespace ler::app
                 }
                 command->addImageBarrier(backBuffer, rhi::Present);*/
 
+                command->addImageBarrier(backBuffer, rhi::RenderTarget);
                 for (const auto& pass : m_renderPasses)
                     pass->begin(backBuffer);
 
@@ -200,6 +205,7 @@ namespace ler::app
                         m_renderPasses[i]->render(backBuffer, command);
                     }
                 }
+                command->addImageBarrier(backBuffer, rhi::Present);
             });
 
             m_device->runGarbageCollection();

@@ -295,17 +295,17 @@ void Command::drawIndexedInstanced(uint32_t indexCount, uint32_t firstIndex, int
 }
 
 void Command::drawIndirectIndexed(const rhi::PipelinePtr& pipeline, const BufferPtr& commands, const BufferPtr& count,
-                                  uint32_t maxDrawCount, uint32_t stride) const
+                                  uint32_t maxDrawCount, uint32_t stride)
 {
     auto* drawsBuff = checked_cast<Buffer*>(commands.get());
     auto* countBuff = checked_cast<Buffer*>(count.get());
     constexpr static UINT64 offset = 0;
 
     ComPtr<ID3D12CommandSignature> signature = checked_cast<Pipeline*>(pipeline.get())->commandSignature.Get();
-    m_commandList->ExecuteIndirect(signature.Get(), maxDrawCount, drawsBuff->handle, offset, countBuff->handle, offset);
+    m_commandList->ExecuteIndirect(signature.Get(), maxDrawCount, drawsBuff->handle, offset, countBuff->handle, sizeof(uint32_t));
 }
 
-void Command::dispatch(uint32_t x, uint32_t y, uint32_t z) const
+void Command::dispatch(uint32_t x, uint32_t y, uint32_t z)
 {
     m_commandList->Dispatch(x, y, z);
 }
@@ -342,7 +342,7 @@ void Command::bindPipeline(const PipelinePtr& pipeline, uint32_t descriptorHandl
     }
 }
 
-void Command::bindPipeline(const PipelinePtr& pipeline, const BindlessTablePtr& table) const
+void Command::bindPipeline(const PipelinePtr& pipeline, const BindlessTablePtr& table)
 {
     auto* native = checked_cast<Pipeline*>(pipeline.get());
     m_commandList->SetPipelineState(native->pipelineState.Get());
@@ -364,7 +364,7 @@ void Command::bindPipeline(const PipelinePtr& pipeline, const BindlessTablePtr& 
     }
 }
 
-void Command::pushConstant(const PipelinePtr& pipeline, ShaderType stage, const void* data, uint8_t size) const
+void Command::pushConstant(const PipelinePtr& pipeline, ShaderType stage, uint32_t slot, const void* data, uint8_t size)
 {
     auto* native = checked_cast<Pipeline*>(pipeline.get());
     if (native->isGraphics())
@@ -386,7 +386,7 @@ void Command::beginRendering(const rhi::PipelinePtr& pipeline, TexturePtr& backB
     m_commandList->OMSetRenderTargets(1, &handle, FALSE, nullptr);
 }
 
-void Command::beginRendering(const RenderingInfo& renderingInfo) const
+void Command::beginRendering(const RenderingInfo& renderingInfo)
 {
     auto color = rhi::Color::White;
     const Extent& viewport = renderingInfo.viewport;

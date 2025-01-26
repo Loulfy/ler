@@ -381,7 +381,7 @@ namespace ler::rhi::vulkan
         if (staging())
         {
             auto data = (uint32_t*) hostInfo.pMappedData;
-            *ptr = *data;
+            *ptr = data[1];
         }
         else
             log::error("Failed to read into buffer");

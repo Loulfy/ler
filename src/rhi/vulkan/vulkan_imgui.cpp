@@ -60,6 +60,8 @@ void ImGuiPass::create(const DevicePtr& device, const SwapChainPtr& swapChain)
 void ImGuiPass::begin(TexturePtr& backBuffer)
 {
     ImGui_ImplVulkan_NewFrame();
+    ImGui_ImplGlfw_NewFrame();
+    ImGui::NewFrame();
 }
 
 void ImGuiPass::render(TexturePtr& backBuffer, CommandPtr& command)

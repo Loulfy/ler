@@ -32,9 +32,11 @@ void ImGuiPass::create(const DevicePtr& device, const SwapChainPtr& swapChain)
                         g_pd3dSrvDescHeap->GetGPUDescriptorHandleForHeapStart());
 }
 
-void ImGuiPass::begin()
+void ImGuiPass::begin(TexturePtr& backBuffer)
 {
     ImGui_ImplDX12_NewFrame();
+    ImGui_ImplGlfw_NewFrame();
+    ImGui::NewFrame();
 }
 
 void ImGuiPass::render(TexturePtr& backBuffer, CommandPtr& command)

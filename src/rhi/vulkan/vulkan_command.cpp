@@ -463,7 +463,7 @@ namespace ler::rhi::vulkan
         constexpr static vk::DeviceSize offset = 0;
         auto* drawsBuff = checked_cast<Buffer*>(commands.get());
         auto* countBuff = checked_cast<Buffer*>(count.get());
-        cmdBuf.drawIndexedIndirectCount(drawsBuff->handle, offset, countBuff->handle, offset, maxDrawCount, stride);
+        cmdBuf.drawIndexedIndirectCount(drawsBuff->handle, offset, countBuff->handle, sizeof(uint32_t), maxDrawCount, stride);
     }
 
     void Command::encodeIndirectIndexed(const EncodeIndirectIndexedDrawDesc& desc)

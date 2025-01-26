@@ -29,7 +29,7 @@ namespace ler::rhi::d3d12
         return std::make_shared<Device>(config);
     }
 
-    std::string d3dFeatureToString(D3D_FEATURE_LEVEL level)
+    static constexpr std::string d3dFeatureToString(D3D_FEATURE_LEVEL level)
     {
         switch(level)
         {
@@ -140,7 +140,7 @@ namespace ler::rhi::d3d12
         m_library = std::make_shared<PSOLibrary>(this);
     }
 
-    void Buffer::uploadFromMemory(const void* src, uint32_t byteSize) const
+    void Buffer::uploadFromMemory(const void* src, uint64_t byteSize) const
     {
         void* pMappedData;
         if (staging() && sizeBytes() >= byteSize && SUCCEEDED(handle->Map(0, nullptr, &pMappedData)))
@@ -158,14 +158,14 @@ namespace ler::rhi::d3d12
         if (staging() && SUCCEEDED(handle->Map(0, nullptr, &pMappedData)))
         {
             auto data = (uint32_t*) pMappedData;
-            *ptr = *data;
+            *ptr = data[1];
             handle->Unmap(0, nullptr);
         }
         else
             log::error("Failed to upload to buffer");
     }
 
-    BufferPtr Device::createBuffer(uint32_t byteSize, bool staging)
+    BufferPtr Device::createBuffer(uint64_t byteSize, bool staging)
     {
         auto buffer = std::make_shared<Buffer>();
 
@@ -245,7 +245,7 @@ namespace ler::rhi::d3d12
             m_context.device->CopyDescriptorsSimple(1, cpuHandle, cpuOnlyHandle, D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV);
         }
         if(desc.isConstantBuffer)
-            buffer->desc.Width = align(desc.byteSize, 256u); // CB size is required to be 256-byte aligned.
+            buffer->desc.Width = align(desc.byteSize, 256ull); // CB size is required to be 256-byte aligned.
 
         buffer->allocDesc.HeapType = desc.isStaging ? D3D12_HEAP_TYPE_UPLOAD : D3D12_HEAP_TYPE_DEFAULT;
         buffer->allocDesc.HeapType = desc.isReadBack ? D3D12_HEAP_TYPE_READBACK : buffer->allocDesc.HeapType;
@@ -268,7 +268,7 @@ namespace ler::rhi::d3d12
         return buffer;
     }
 
-    BufferPtr Device::createHostBuffer(uint32_t byteSize)
+    BufferPtr Device::createHostBuffer(uint64_t byteSize)
     {
         return createBuffer(byteSize, true);
     }

@@ -258,20 +258,23 @@ namespace ler::rhi::d3d12
 
         void reset() override;
         void bindPipeline(const PipelinePtr& pipeline, uint32_t descriptorHandle) const override;
-        void bindPipeline(const PipelinePtr& pipeline, const BindlessTablePtr& table) const override;
-        void pushConstant(const PipelinePtr& pipeline, ShaderType stage, const void* data, uint8_t size) const override;
+        void bindPipeline(const PipelinePtr& pipeline, const BindlessTablePtr& table)  override;
+        void setConstant(const BufferPtr& buffer, ShaderType stage) override {}
+        void pushConstant(const PipelinePtr& pipeline, ShaderType stage, uint32_t slot, const void* data, uint8_t size) override;
         void drawIndexed(uint32_t vertexCount) const override;
         void drawIndexedInstanced(uint32_t indexCount, uint32_t firstIndex, int32_t firstVertex, uint32_t firstId) const override;
-        void drawIndirectIndexed(const rhi::PipelinePtr& pipeline, const BufferPtr& commands, const BufferPtr& count, uint32_t maxDrawCount, uint32_t stride) const override;
-        void dispatch(uint32_t x, uint32_t y, uint32_t z) const override;
+        void encodeIndirectIndexed(const EncodeIndirectIndexedDrawDesc& desc) override {}
+        void drawIndirectIndexed(const rhi::PipelinePtr& pipeline, const BufferPtr& commands, const BufferPtr& count, uint32_t maxDrawCount, uint32_t stride) override;
+        void dispatch(uint32_t x, uint32_t y, uint32_t z) override;
         void endRendering() const override;
-        void beginRendering(const RenderingInfo& renderingInfo) const override;
+        void beginRendering(const RenderingInfo& renderingInfo) override;
         void beginRendering(const rhi::PipelinePtr& pipeline, TexturePtr& backBuffer) override;
         void addImageBarrier(const TexturePtr& texture, ResourceState new_state) const override;
         void addBufferBarrier(const BufferPtr& buffer, ResourceState new_state) const override;
         void clearColorImage(const TexturePtr& texture, const std::array<float,4>& color) const override;
         void copyBufferToTexture(const BufferPtr& buffer, const TexturePtr& texture, const Subresource& sub, const unsigned char* pSrcData) const override;
         void copyBuffer(const BufferPtr& src, const BufferPtr& dst, uint64_t byteSize, uint64_t dstOffset) override;
+        void syncBuffer(const BufferPtr& dst, const void* src, uint64_t byteSize) override {}
         void fillBuffer(const BufferPtr& dst, uint32_t value) const override;
         void bindIndexBuffer(const BufferPtr& indexBuffer) override;
         void bindVertexBuffers(uint32_t slot, const BufferPtr& indexBuffer) override;
@@ -411,7 +414,7 @@ namespace ler::rhi::d3d12
       public:
 
         ~ImGuiPass() override;
-        void begin() override;
+        void begin(TexturePtr& backBuffer) override;
         void create(const DevicePtr& device, const SwapChainPtr& swapChain) override;
         void render(TexturePtr& backBuffer, CommandPtr& command) override;
 
@@ -428,9 +431,9 @@ namespace ler::rhi::d3d12
         ~Device() override;
 
         // Buffer
-        BufferPtr createBuffer(uint32_t byteSize, bool staging) override;
+        BufferPtr createBuffer(uint64_t byteSize, bool staging) override;
         BufferPtr createBuffer(const BufferDesc& desc) override;
-        BufferPtr createHostBuffer(uint32_t byteSize) override;
+        BufferPtr createHostBuffer(uint64_t byteSize) override;
 
         // Texture
         TexturePtr createTexture(const TextureDesc& desc) override;

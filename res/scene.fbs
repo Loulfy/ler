@@ -55,8 +55,8 @@ struct Mesh {
 enum BufferType : byte { Index = 0, Position, Texcoord, Normal, Tangent }
 
 struct Buffer {
-    byte_length:uint32;
-    byte_offset:uint32;
+    byte_length:uint64;
+    byte_offset:uint64;
     type:BufferType;
 }
 
