@@ -6,6 +6,7 @@
 #define MTL_PRIVATE_IMPLEMENTATION
 #define CA_PRIVATE_IMPLEMENTATION
 #include "log/log.hpp"
+#include "metal_encoder.h"
 #include "rhi/metal.hpp"
 
 namespace ler::rhi::metal
@@ -38,15 +39,18 @@ Device::Device(const DeviceConfig& config)
     m_threadPool = std::make_shared<coro::thread_pool>(coro::thread_pool::options{ .thread_count = 8 });
     m_storage = std::make_shared<Storage>(this, m_threadPool);
 
-    fs::path path = sys::ASSETS_DIR / "encoder.metallib";
+    dispatch_data_t dispatchData =
+        dispatch_data_create(kMetalEncoderMultiDrawBytecodes.begin(), kMetalEncoderMultiDrawBytecodes.size(), nullptr,
+                             DISPATCH_DATA_DESTRUCTOR_DEFAULT);
     NS::Error* mtlError = nil;
-    const NS::SharedPtr<MTL::Library> library = NS::TransferPtr(
-        m_device->newLibrary(NS::String::string(path.c_str(), NS::StringEncoding::UTF8StringEncoding), &mtlError));
+    const NS::SharedPtr<MTL::Library> library = NS::TransferPtr(m_device->newLibrary(dispatchData, &mtlError));
+    dispatch_release(dispatchData);
 
-    MTL::Function* func =
-        library->newFunction(NS::String::string("cullMeshesAndEncodeCommands", NS::StringEncoding::UTF8StringEncoding));
+    MTL::Function* func = library->newFunction(
+        NS::String::string(kMetalEncoderMultiDrawName.begin(), NS::StringEncoding::UTF8StringEncoding));
     const MTL::AutoreleasedComputePipelineReflection* reflection = nullptr;
-    m_indirectComputeEncoder = NS::TransferPtr(m_device->newComputePipelineState(func, MTL::PipelineOptionArgumentInfo, reflection, &mtlError));
+    m_indirectComputeEncoder = NS::TransferPtr(
+        m_device->newComputePipelineState(func, MTL::PipelineOptionArgumentInfo, reflection, &mtlError));
     m_indirectArgumentEncoder = NS::TransferPtr(func->newArgumentEncoder(4));
     func->release();
 
@@ -84,7 +88,7 @@ BufferPtr Device::createBuffer(const BufferDesc& desc)
     if (const MTL::PixelFormat format = convertFormat(desc.format); format != MTL::PixelFormatInvalid)
     {
         const FormatBlockInfo formatInfo = formatToBlockInfo(desc.format);
-        const uint32_t element_num = desc.byteSize / formatInfo.blockSizeByte;
+        const uint64_t element_num = desc.byteSize / formatInfo.blockSizeByte;
         const MTL::TextureDescriptor* descriptor = MTL::TextureDescriptor::textureBufferDescriptor(
             format, element_num, buffer->handle->resourceOptions(), MTL::TextureUsageShaderRead);
         buffer->view = buffer->handle->newTexture(descriptor, 0, desc.byteSize);
@@ -100,7 +104,8 @@ BufferPtr Device::createBuffer(const BufferDesc& desc)
         indirectDesc->setInheritPipelineState(true);
 
         ICBContainer container;
-        container.icb = NS::TransferPtr(m_device->newIndirectCommandBuffer(indirectDesc, 2048u, MTL::ResourceStorageModePrivate));
+        container.icb =
+            NS::TransferPtr(m_device->newIndirectCommandBuffer(indirectDesc, 2048u, MTL::ResourceStorageModePrivate));
         container.icb->setLabel(NS::String::string(debugName.c_str(), NS::StringEncoding::UTF8StringEncoding));
         indirectDesc->release();
 
@@ -111,7 +116,8 @@ BufferPtr Device::createBuffer(const BufferDesc& desc)
         container.topLevel = NS::TransferPtr(m_device->newBuffer(132u * 2048u, MTL::ResourceStorageModePrivate));
         container.topLevel->setLabel(NS::String::string("TopLevel", NS::StringEncoding::UTF8StringEncoding));
 
-        container.bindingArgs = NS::TransferPtr(m_device->newBuffer(m_indirectArgumentEncoder->encodedLength(), MTL::ResourceStorageModeShared));
+        container.bindingArgs = NS::TransferPtr(
+            m_device->newBuffer(m_indirectArgumentEncoder->encodedLength(), MTL::ResourceStorageModeShared));
         m_indirectArgumentEncoder->setArgumentBuffer(container.bindingArgs.get(), 0);
         m_indirectArgumentEncoder->setIndirectCommandBuffer(container.icb.get(), 0);
         m_indirectArgumentEncoder->setBuffer(container.uniforms.get(), 0, 1);

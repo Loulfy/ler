@@ -73,7 +73,7 @@ void CommonStorage::requestLoadTexture(coro::latch& latch, BindlessTablePtr& tab
 }
 
 void CommonStorage::requestLoadBuffer(coro::latch& latch, const ReadOnlyFilePtr& file, BufferPtr& buffer,
-                                      uint32_t fileLength, uint32_t fileOffset)
+                                      uint64_t fileLength, uint64_t fileOffset)
 {
     m_scheduler.start(makeBufferTask(latch, file, buffer, fileLength, fileOffset));
 }

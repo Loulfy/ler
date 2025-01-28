@@ -338,7 +338,7 @@ namespace ler::rhi
         virtual ReadOnlyFilePtr openFile(const fs::path& path) = 0;
         virtual std::vector<ReadOnlyFilePtr> openFiles(const fs::path& path, const fs::path& ext) = 0;
         virtual void requestLoadTexture(coro::latch& latch, BindlessTablePtr& table, const std::span<ReadOnlyFilePtr>& files) = 0;
-        virtual void requestLoadBuffer(coro::latch& latch, const ReadOnlyFilePtr& file, BufferPtr& buffer, uint32_t fileLength, uint32_t fileOffset) = 0;
+        virtual void requestLoadBuffer(coro::latch& latch, const ReadOnlyFilePtr& file, BufferPtr& buffer, uint64_t fileLength, uint64_t fileOffset) = 0;
     };
 
     using StoragePtr = std::shared_ptr<IStorage>;

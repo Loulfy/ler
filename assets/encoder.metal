@@ -46,13 +46,13 @@ struct Command
 };
 
 kernel void
-cullMeshesAndEncodeCommands(uint                      objectIndex    [[ thread_position_in_grid ]],
-                            constant Command          *cmd           [[ buffer(5) ]],
-                            constant uint             *indices       [[ buffer(3) ]],
-                            constant uint64_t         *cbvAddr       [[ buffer(2) ]],
-                            constant uint8_t          *descHeap      [[ buffer(0) ]],
-                            constant float            *vertices      [[ buffer(6) ]],
-                            device ICBContainer       *icb_container [[ buffer(4) ]])
+encodeMultiDrawIndexedCommands(uint                 objectIndex    [[ thread_position_in_grid ]],
+                               constant Command     *cmd           [[ buffer(5) ]],
+                               constant uint        *indices       [[ buffer(3) ]],
+                               constant uint64_t    *cbvAddr       [[ buffer(2) ]],
+                               constant uint8_t     *descHeap      [[ buffer(0) ]],
+                               constant float       *vertices      [[ buffer(6) ]],
+                               device ICBContainer  *icb_container [[ buffer(4) ]])
 {
     render_command rc(icb_container->commandBuffer, objectIndex);
     

@@ -208,8 +208,8 @@ coro::task<> Storage::makeMultiTextureTask(coro::latch& latch, BindlessTablePtr 
     co_return;
 }
 
-coro::task<> Storage::makeBufferTask(coro::latch& latch, ReadOnlyFilePtr file, BufferPtr buffer, uint32_t fileLength,
-                                     uint32_t fileOffset)
+coro::task<> Storage::makeBufferTask(coro::latch& latch, ReadOnlyFilePtr file, BufferPtr buffer, uint64_t fileLength,
+                                     uint64_t fileOffset)
 {
     auto* f = checked_cast<ReadOnlyFile*>(file.get());
 

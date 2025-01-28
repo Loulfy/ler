@@ -110,7 +110,7 @@ coro::task<> Storage::makeMultiTextureTask(coro::latch& latch, BindlessTablePtr 
     struct DepRequest
     {
         int bufferId = 0;
-        uint32_t offset = 0;
+        uint64_t offset = 0;
     };
 
     // std::vector<img::ITexture*> images;
@@ -120,7 +120,7 @@ coro::task<> Storage::makeMultiTextureTask(coro::latch& latch, BindlessTablePtr 
     for (int i = 0; i < files.size(); ++i)
     {
         MTL::IOFileHandle* srcFile = checked_cast<ReadOnlyFile*>(files[i].get())->handle;
-        const uint32_t byteSizes = align(files[i]->sizeBytes(), 16ull);
+        const uint64_t byteSizes = align(files[i]->sizeBytes(), 16ull);
 
         if (offset + byteSizes > capacity)
         {
@@ -158,7 +158,7 @@ coro::task<> Storage::makeMultiTextureTask(coro::latch& latch, BindlessTablePtr 
         TexturePtr texture = m_device->createTexture(desc);
         table->setResource(texture, texIndex);
 
-        for (const size_t mip : std::views::iota(0u, levels.size()))
+        for (const uint32_t mip : std::views::iota(0u, levels.size()))
         {
             const img::ITexture::LevelIndexEntry& level = levels[mip];
             // log::info("byteOffset = {}, byteLength = {}", level.byteOffset, level.byteLength);
@@ -182,7 +182,7 @@ coro::task<> Storage::makeMultiTextureTask(coro::latch& latch, BindlessTablePtr 
     co_return;
 }
 
-coro::task<> Storage::makeBufferTask(coro::latch& latch, ReadOnlyFilePtr file, BufferPtr buffer, uint32_t fileLength, uint32_t fileOffset)
+coro::task<> Storage::makeBufferTask(coro::latch& latch, ReadOnlyFilePtr file, BufferPtr buffer, uint64_t fileLength, uint64_t fileOffset)
 {
     const MTL::Buffer* dstBuffer = checked_cast<Buffer*>(buffer.get())->handle;
     const MTL::IOFileHandle* srcFile = checked_cast<ReadOnlyFile*>(file.get())->handle;

@@ -62,7 +62,7 @@ struct Texture final : public ITexture
     ~Texture() override = default;
     explicit Texture(const MetalContext& context) : m_context(context) {}
 
-    [[nodiscard]] Extent extent() const override { return {handle->width(), handle->height()}; }
+    [[nodiscard]] Extent extent() const override { return {static_cast<uint32_t>(handle->width()), static_cast<uint32_t>(handle->height())}; }
     // clang-format on
 
   private:
@@ -271,7 +271,7 @@ private:
 
     coro::task<> makeSingleTextureTask(coro::latch& latch, BindlessTablePtr table, ReadOnlyFilePtr file) override;
     coro::task<> makeMultiTextureTask(coro::latch& latch, BindlessTablePtr table, std::vector<ReadOnlyFilePtr> files) override;
-    coro::task<> makeBufferTask(coro::latch& latch, ReadOnlyFilePtr file, BufferPtr buffer, uint32_t fileLength, uint32_t fileOffset) override;
+    coro::task<> makeBufferTask(coro::latch& latch, ReadOnlyFilePtr file, BufferPtr buffer, uint64_t fileLength, uint64_t fileOffset) override;
 };
 
 class ImGuiPass : public IRenderPass

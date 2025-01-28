@@ -116,6 +116,7 @@ elseif (CMAKE_SYSTEM_NAME STREQUAL "Darwin")
     enable_language(OBJCXX)
     list(APPEND SRC
         "src/rhi/metal.hpp"
+        "src/rhi/metal/metal_encoder.h"
         "src/rhi/metal/metal_device.cpp"
         "src/rhi/metal/metal_format.cpp"
         "src/rhi/metal/metal_runtime.cpp"
