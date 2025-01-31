@@ -158,7 +158,7 @@ namespace ler::rhi::vulkan
     class BindlessTable : public CommonBindlessTable
     {
       public:
-        BindlessTable(const VulkanContext& context, uint32_t count);
+        explicit BindlessTable(const VulkanContext& context);
         void setSampler(const SamplerPtr& sampler, uint32_t slot) override;
 
         static vk::UniqueDescriptorSetLayout buildBindlessLayout(const VulkanContext& context, uint32_t count);
@@ -175,8 +175,8 @@ namespace ler::rhi::vulkan
             vk::DescriptorType::eSampledImage,
             vk::DescriptorType::eUniformBuffer,
             vk::DescriptorType::eStorageBuffer,
-            vk::DescriptorType::eStorageTexelBuffer,
-            vk::DescriptorType::eAccelerationStructureKHR
+            vk::DescriptorType::eStorageTexelBuffer
+            // TODO: RADV does not support vk::DescriptorType::eAccelerationStructureKHR
         };
 
         static constexpr std::initializer_list<vk::DescriptorType> kMutable = {
@@ -185,7 +185,7 @@ namespace ler::rhi::vulkan
         };
 
         void createBufferDescriptor(Buffer& buffer, uint64_t layoutSize) const;
-        uint32_t getDescriptorSizeForType(vk::DescriptorType descriptorType) const;
+        [[nodiscard]] uint32_t getDescriptorSizeForType(vk::DescriptorType descriptorType) const;
 
         bool visitTexture(const TexturePtr& texture, uint32_t slot) override;
         bool visitBuffer(const BufferPtr& buffer, uint32_t slot) override;

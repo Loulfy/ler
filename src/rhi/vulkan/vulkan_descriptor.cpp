@@ -6,8 +6,7 @@
 
 namespace ler::rhi::vulkan
 {
-BindlessTable::BindlessTable(const VulkanContext& context, uint32_t count)
-    : m_context(context), m_bufferDescriptor(context)
+BindlessTable::BindlessTable(const VulkanContext& context) : m_context(context), m_bufferDescriptor(context)
 {
     vk::DeviceSize layoutSize;
     m_context.device.getDescriptorSetLayoutSizeEXT(m_context.bindlessLayout, &layoutSize);
@@ -22,9 +21,9 @@ BindlessTable::BindlessTable(const VulkanContext& context, uint32_t count)
 
 void BindlessTable::createBufferDescriptor(Buffer& buffer, uint64_t layoutSize) const
 {
-    vk::BufferUsageFlags usageFlags = vk::BufferUsageFlagBits::eShaderDeviceAddress |
-                                      vk::BufferUsageFlagBits::eResourceDescriptorBufferEXT |
-                                      vk::BufferUsageFlagBits::eSamplerDescriptorBufferEXT;
+    constexpr vk::BufferUsageFlags usageFlags = vk::BufferUsageFlagBits::eShaderDeviceAddress |
+                                                vk::BufferUsageFlagBits::eResourceDescriptorBufferEXT |
+                                                vk::BufferUsageFlagBits::eSamplerDescriptorBufferEXT;
     buffer.info.setSize(layoutSize);
     buffer.info.setUsage(usageFlags);
     buffer.info.setSharingMode(vk::SharingMode::eExclusive);
@@ -111,14 +110,14 @@ vk::UniqueDescriptorSetLayout BindlessTable::buildBindlessLayout(const VulkanCon
     vk::DescriptorSetLayoutSupport support;
     context.device.getDescriptorSetLayoutSupport(&descriptorLayoutInfo, &support);
     if (!support.supported)
-        log::exit("Mutable DescriptorSet not supported");
+        log::exit("Mutable DescriptorSetLayout not supported");
     return context.device.createDescriptorSetLayoutUnique(descriptorLayoutInfo);
 }
 
 void BindlessTable::setSampler(const SamplerPtr& sampler, uint32_t slot)
 {
     auto* native = checked_cast<Sampler*>(sampler.get());
-    auto type = vk::DescriptorType::eSampler;
+    constexpr auto type = vk::DescriptorType::eSampler;
 
     vk::DescriptorImageInfo imageInfo;
     imageInfo.setSampler(native->handle.get());
@@ -127,9 +126,7 @@ void BindlessTable::setSampler(const SamplerPtr& sampler, uint32_t slot)
     cpuHandle += m_samplerDescriptorOffset;
     cpuHandle += slot * getDescriptorSizeForType(type);
 
-    vk::DescriptorGetInfoEXT info;
-    info.setType(type);
-    info.setData(&imageInfo);
+    const vk::DescriptorGetInfoEXT info(type, &imageInfo);
     m_context.device.getDescriptorEXT(info, getDescriptorSizeForType(type), cpuHandle);
 }
 
@@ -141,13 +138,13 @@ bool BindlessTable::visitTexture(const TexturePtr& texture, uint32_t slot)
     cpuHandle += m_mutableDescriptorOffset;
     cpuHandle += slot * m_mutableDescriptorSize;
 
-    auto type = vk::DescriptorType::eSampledImage;
+    constexpr auto type = vk::DescriptorType::eSampledImage;
 
     vk::DescriptorImageInfo imageInfo;
     imageInfo.setImageLayout(vk::ImageLayout::eShaderReadOnlyOptimal);
     imageInfo.setImageView(image->view());
 
-    vk::DescriptorGetInfoEXT info(type, &imageInfo);
+    const vk::DescriptorGetInfoEXT info(type, &imageInfo);
     m_context.device.getDescriptorEXT(info, getDescriptorSizeForType(type), cpuHandle);
 
     return true;
@@ -155,7 +152,7 @@ bool BindlessTable::visitTexture(const TexturePtr& texture, uint32_t slot)
 
 bool BindlessTable::visitBuffer(const BufferPtr& buffer, uint32_t slot)
 {
-    auto* buff = checked_cast<Buffer*>(buffer.get());
+    const auto* buff = checked_cast<Buffer*>(buffer.get());
 
     auto* cpuHandle = static_cast<std::byte*>(m_bufferDescriptor.hostInfo.pMappedData);
     cpuHandle += m_mutableDescriptorOffset;
@@ -172,7 +169,7 @@ bool BindlessTable::visitBuffer(const BufferPtr& buffer, uint32_t slot)
     if (buff->info.usage & vk::BufferUsageFlagBits::eStorageTexelBuffer)
         type = vk::DescriptorType::eStorageTexelBuffer;
 
-    vk::DescriptorGetInfoEXT info(type, &addrInfo);
+    const vk::DescriptorGetInfoEXT info(type, &addrInfo);
     m_context.device.getDescriptorEXT(info, getDescriptorSizeForType(type), cpuHandle);
 
     return true;
@@ -185,6 +182,6 @@ vk::DeviceAddress BindlessTable::bufferDescriptorGPUAddress() const
 
 BindlessTablePtr Device::createBindlessTable(uint32_t count)
 {
-    return std::make_shared<BindlessTable>(m_context, count);
+    return std::make_shared<BindlessTable>(m_context);
 }
 } // namespace ler::rhi::vulkan
