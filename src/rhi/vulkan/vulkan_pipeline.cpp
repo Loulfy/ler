@@ -533,6 +533,7 @@ namespace ler::rhi::vulkan
         pipelineInfo.setPNext(&renderingCreateInfo);
         pipelineInfo.setRenderPass(nullptr);
         pipelineInfo.setLayout(pipeline->pipelineLayout.get());
+        pipelineInfo.setFlags(vk::PipelineCreateFlagBits::eDescriptorBufferEXT);
         pipelineInfo.setStages(pipelineShaderStages);
         pipelineInfo.setPVertexInputState(&pvi);
         pipelineInfo.setPInputAssemblyState(&pia);
@@ -562,6 +563,7 @@ namespace ler::rhi::vulkan
         auto pipelineInfo = vk::ComputePipelineCreateInfo();
         pipelineInfo.setStage(pipelineShaderStages.front());
         pipelineInfo.setLayout(pipeline->pipelineLayout.get());
+        pipelineInfo.setFlags(vk::PipelineCreateFlagBits::eDescriptorBufferEXT);
 
         auto res = m_context.device.createComputePipelineUnique(m_context.pipelineCache, pipelineInfo);
         pipeline->bindPoint = vk::PipelineBindPoint::eCompute;

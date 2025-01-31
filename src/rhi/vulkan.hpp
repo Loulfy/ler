@@ -55,6 +55,7 @@ namespace ler::rhi::vulkan
         bool rayTracing = false;
         bool memoryPriority = false;
         bool binaryPipeline = false;
+        bool descriptorBuffer = false;
         bool mutableDescriptor = false;
         bool drawIndirectCount = false;
     };
@@ -69,6 +70,7 @@ namespace ler::rhi::vulkan
         VmaAllocator allocator = nullptr;
         vk::PipelineCache pipelineCache;
         vk::DescriptorSetLayout bindlessLayout;
+        vk::PhysicalDeviceDescriptorBufferPropertiesEXT descBufferProperties;
         uint64_t hostPointerAlignment = 4096u;
         bool hostBuffer = true;
         bool debug = false;
@@ -92,6 +94,8 @@ namespace ler::rhi::vulkan
         void uploadFromMemory(const void* src, uint64_t byteSize) const override;
         void getUint(uint32_t* ptr) const override;
         void setName(const std::string& debugName);
+
+        [[nodiscard]] vk::DeviceAddress getGPUAddress() const;
 
     private:
 
@@ -157,26 +161,31 @@ namespace ler::rhi::vulkan
         BindlessTable(const VulkanContext& context, uint32_t count);
         void setSampler(const SamplerPtr& sampler, uint32_t slot) override;
 
-        static vk::UniqueDescriptorSetLayout buildBindlessLayout(const VulkanContext& context, uint32_t count, bool useMutable);
-        vk::DescriptorSet m_descriptor;
+        static vk::UniqueDescriptorSetLayout buildBindlessLayout(const VulkanContext& context, uint32_t count);
+        [[nodiscard]] vk::DeviceAddress bufferDescriptorGPUAddress() const;
 
       private:
         const VulkanContext& m_context;
-        vk::UniqueDescriptorPool m_pool;
-        vk::UniqueDescriptorSetLayout m_layout;
+        uint32_t m_mutableDescriptorSize = 0u;
+        vk::DeviceSize m_mutableDescriptorOffset = 0u;
+        vk::DeviceSize m_samplerDescriptorOffset = 0u;
+        Buffer m_bufferDescriptor;
 
         static constexpr std::initializer_list<vk::DescriptorType> kStandard = {
             vk::DescriptorType::eSampledImage,
-            vk::DescriptorType::eSampler,
             vk::DescriptorType::eUniformBuffer,
             vk::DescriptorType::eStorageBuffer,
-            vk::DescriptorType::eStorageTexelBuffer
+            vk::DescriptorType::eStorageTexelBuffer,
+            vk::DescriptorType::eAccelerationStructureKHR
         };
 
         static constexpr std::initializer_list<vk::DescriptorType> kMutable = {
             vk::DescriptorType::eMutableEXT,
             vk::DescriptorType::eSampler
         };
+
+        void createBufferDescriptor(Buffer& buffer, uint64_t layoutSize) const;
+        uint32_t getDescriptorSizeForType(vk::DescriptorType descriptorType) const;
 
         bool visitTexture(const TexturePtr& texture, uint32_t slot) override;
         bool visitBuffer(const BufferPtr& buffer, uint32_t slot) override;

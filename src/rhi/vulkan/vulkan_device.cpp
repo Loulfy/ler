@@ -34,7 +34,8 @@ namespace ler::rhi::vulkan
 
     using PropertiesChain = vk::StructureChain<vk::PhysicalDeviceProperties2,
                 vk::PhysicalDeviceSubgroupProperties,
-                vk::PhysicalDeviceExternalMemoryHostPropertiesEXT>;
+                vk::PhysicalDeviceExternalMemoryHostPropertiesEXT,
+                vk::PhysicalDeviceDescriptorBufferPropertiesEXT>;
 
     using FeaturesChain = vk::StructureChain<vk::PhysicalDeviceFeatures2,
                 vk::PhysicalDeviceVulkan11Features,
@@ -43,6 +44,7 @@ namespace ler::rhi::vulkan
                 vk::PhysicalDeviceSynchronization2Features,
                 vk::PhysicalDeviceDynamicRenderingFeatures,
                 vk::PhysicalDeviceMutableDescriptorTypeFeaturesEXT,
+                vk::PhysicalDeviceDescriptorBufferFeaturesEXT,
                 vk::PhysicalDeviceRayQueryFeaturesKHR,
                 vk::PhysicalDeviceRayTracingPipelineFeaturesKHR,
                 vk::PhysicalDeviceAccelerationStructureFeaturesKHR>;
@@ -54,6 +56,7 @@ namespace ler::rhi::vulkan
                 vk::PhysicalDeviceSynchronization2Features,
                 vk::PhysicalDeviceDynamicRenderingFeatures,
                 vk::PhysicalDeviceMutableDescriptorTypeFeaturesEXT,
+                vk::PhysicalDeviceDescriptorBufferFeaturesEXT,
                 vk::PhysicalDeviceRayQueryFeaturesKHR,
                 vk::PhysicalDeviceRayTracingPipelineFeaturesKHR,
                 vk::PhysicalDeviceAccelerationStructureFeaturesKHR>;
@@ -74,6 +77,8 @@ namespace ler::rhi::vulkan
             features.binaryPipeline = true;
         if(supportedExtensionSet.contains(VK_EXT_MUTABLE_DESCRIPTOR_TYPE_EXTENSION_NAME))
             features.mutableDescriptor = true;
+        if(supportedExtensionSet.contains(VK_EXT_DESCRIPTOR_BUFFER_EXTENSION_NAME))
+            features.descriptorBuffer = true;
 
         return features;
     }
@@ -114,6 +119,10 @@ namespace ler::rhi::vulkan
         // Enable Mutable Descriptor
         if(features.mutableDescriptor)
             deviceExtensions.emplace_back(VK_EXT_MUTABLE_DESCRIPTOR_TYPE_EXTENSION_NAME);
+
+        // Enable Descriptor Buffer
+        if(features.descriptorBuffer)
+            deviceExtensions.emplace_back(VK_EXT_DESCRIPTOR_BUFFER_EXTENSION_NAME);
     }
 
     void printVulkanFeatures(const VulkanFeatures& features, const PropertiesChain& p, const FeaturesChain& f)
@@ -127,6 +136,7 @@ namespace ler::rhi::vulkan
         auto memoryProps = p.get<vk::PhysicalDeviceExternalMemoryHostPropertiesEXT>();
         log::info("RayTracing: {}", features.rayTracing);
         log::info("HostBuffer: {}", features.hostBuffer);
+        log::info("DescriptorBuffer: {}", features.descriptorBuffer);
         log::info("MutableDescriptor: {}", features.mutableDescriptor);
         log::info("DrawIndirectCount: {}", features.drawIndirectCount);
         log::info("SubgroupSize: {}", subgroupProps.subgroupSize);
@@ -148,6 +158,8 @@ namespace ler::rhi::vulkan
 
         if(!features.mutableDescriptor)
             createInfoChain.unlink<vk::PhysicalDeviceMutableDescriptorTypeFeaturesEXT>();
+        if(!features.descriptorBuffer)
+            createInfoChain.unlink<vk::PhysicalDeviceDescriptorBufferFeaturesEXT>();
         if(!features.rayTracing)
         {
             createInfoChain.unlink<vk::PhysicalDeviceRayQueryFeaturesKHR>();
@@ -294,6 +306,9 @@ namespace ler::rhi::vulkan
         vk::PhysicalDeviceMutableDescriptorTypeFeaturesEXT mutableFeature;
         mutableFeature.setMutableDescriptorType(true);
 
+        vk::PhysicalDeviceDescriptorBufferFeaturesEXT descriptorFeature;
+        descriptorFeature.setDescriptorBuffer(true);
+
         vk::PhysicalDevicePipelineBinaryFeaturesKHR pipelineFeature;
         pipelineFeature.setPipelineBinaries(true);
 
@@ -320,6 +335,7 @@ namespace ler::rhi::vulkan
                 sync2Features,
                 dynRenderFeature,
                 mutableFeature,
+                descriptorFeature,
                 rayQueryFeatures,
                 rayTracingPipelineFeatures,
                 accelerationStructureFeatures);
@@ -353,7 +369,8 @@ namespace ler::rhi::vulkan
         m_context.allocator = allocator;
         m_context.debug = config.debug;
 
-        m_bindlessLayout = BindlessTable::buildBindlessLayout(m_context, 128, vulkanFeatures.mutableDescriptor);
+        m_bindlessLayout = BindlessTable::buildBindlessLayout(m_context, 128);
+        m_context.descBufferProperties = pp.get<vk::PhysicalDeviceDescriptorBufferPropertiesEXT>();
         m_context.bindlessLayout = m_bindlessLayout.get();
 
         m_context.hostBuffer = config.hostBuffer;
@@ -507,7 +524,7 @@ namespace ler::rhi::vulkan
         auto buffer = std::make_shared<Buffer>(m_context);
         buffer->format = convertFormat(desc.format);
         const vk::FormatProperties p = m_context.physicalDevice.getFormatProperties(buffer->format);
-        vk::BufferUsageFlags usageFlags = vk::BufferUsageFlagBits::eTransferSrc | vk::BufferUsageFlagBits::eTransferDst;
+        vk::BufferUsageFlags usageFlags = vk::BufferUsageFlagBits::eTransferSrc | vk::BufferUsageFlagBits::eTransferDst | vk::BufferUsageFlagBits::eShaderDeviceAddress;
         if(desc.isVertexBuffer)
             usageFlags |= vk::BufferUsageFlagBits::eVertexBuffer;
         else if(desc.isIndexBuffer)
@@ -575,6 +592,11 @@ namespace ler::rhi::vulkan
         nameInfo.setObjectHandle(reinterpret_cast<uint64_t>(raw));
         nameInfo.setPObjectName(debugName.c_str());
         m_context.device.setDebugUtilsObjectNameEXT(nameInfo);
+    }
+
+    vk::DeviceAddress Buffer::getGPUAddress() const
+    {
+        return m_context.device.getBufferAddress(handle);
     }
 
     TexturePtr Device::createTexture(const TextureDesc& desc)

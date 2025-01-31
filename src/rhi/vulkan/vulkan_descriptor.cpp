@@ -6,99 +6,75 @@
 
 namespace ler::rhi::vulkan
 {
-BindlessTable::BindlessTable(const VulkanContext& context, uint32_t count) : m_context(context)
+BindlessTable::BindlessTable(const VulkanContext& context, uint32_t count)
+    : m_context(context), m_bufferDescriptor(context)
 {
-    std::vector<vk::DescriptorPoolSize> descriptorPoolSize;
-    //std::vector<vk::DescriptorSetLayoutBinding> bindings;
-    for(auto& b : kStandard)
-        descriptorPoolSize.emplace_back(b, count);
+    vk::DeviceSize layoutSize;
+    m_context.device.getDescriptorSetLayoutSizeEXT(m_context.bindlessLayout, &layoutSize);
+    createBufferDescriptor(m_bufferDescriptor, layoutSize);
 
-    auto descriptorPoolInfo = vk::DescriptorPoolCreateInfo();
-    descriptorPoolInfo.setPoolSizes(descriptorPoolSize);
-    descriptorPoolInfo.setFlags(vk::DescriptorPoolCreateFlagBits::eUpdateAfterBind);
-    descriptorPoolInfo.setMaxSets(1);
-    m_pool = m_context.device.createDescriptorPoolUnique(descriptorPoolInfo);
+    m_context.device.getDescriptorSetLayoutBindingOffsetEXT(m_context.bindlessLayout, 0, &m_mutableDescriptorOffset);
+    m_context.device.getDescriptorSetLayoutBindingOffsetEXT(m_context.bindlessLayout, 1, &m_samplerDescriptorOffset);
 
-    /*const vk::MutableDescriptorTypeListEXT list(kTypes);
-    std::vector<vk::MutableDescriptorTypeListEXT> mutable_list;
-
-    bool useMutable = false;
-    if (useMutable)
-    {
-        bindings.resize(1);
-        bindings[0].binding = 0;
-        bindings[0].descriptorType = vk::DescriptorType::eMutableEXT;
-        bindings[0].descriptorCount = count;
-        bindings[0].stageFlags = vk::ShaderStageFlagBits::eAll;
-        bindings.emplace_back(0, vk::DescriptorType::eMutableEXT, count, vk::ShaderStageFlagBits::eAll);
-        descriptorPoolSize.emplace_back(vk::DescriptorType::eMutableEXT, count);
-        mutable_list.emplace_back(list);
-    }
-    else
-    {
-        bindings.resize(kTypes.size());
-        mutable_list.resize(kTypes.size());
-        descriptorPoolSize.resize(kTypes.size());
-        for (int i = 0; i < kTypes.size(); ++i)
-        {
-            bindings[i].binding = i;
-            bindings[i].descriptorType = kTypes[i];
-            bindings[i].descriptorCount = 16;
-            bindings[i].stageFlags = vk::ShaderStageFlagBits::eAll;
-            descriptorPoolSize[i].type = kTypes[i];
-            descriptorPoolSize[i].descriptorCount = count;
-        }
-    }
-
-    auto descriptorPoolInfo = vk::DescriptorPoolCreateInfo();
-    descriptorPoolInfo.setPoolSizes(descriptorPoolSize);
-    descriptorPoolInfo.setFlags(vk::DescriptorPoolCreateFlagBits::eUpdateAfterBind);
-    descriptorPoolInfo.setMaxSets(1);
-    m_pool = m_context.device.createDescriptorPoolUnique(descriptorPoolInfo);
-
-    vk::DescriptorSetLayoutCreateInfo descriptorLayoutInfo;
-    descriptorLayoutInfo.setBindings(bindings);
-
-    vk::MutableDescriptorTypeCreateInfoEXT mutable_info;
-    mutable_info.setMutableDescriptorTypeLists(mutable_list);
-
-    vk::DescriptorSetLayoutBindingFlagsCreateInfo extended_info;
-    vk::DescriptorBindingFlags bindless_flags =
-        vk::DescriptorBindingFlagBits::ePartiallyBound | vk::DescriptorBindingFlagBits::eUpdateAfterBind;
-    std::vector<vk::DescriptorBindingFlags> binding_flags(descriptorLayoutInfo.bindingCount, bindless_flags);
-    extended_info.setBindingFlags(binding_flags);
-    extended_info.setPNext(&mutable_info);
-
-    descriptorLayoutInfo.setFlags(vk::DescriptorSetLayoutCreateFlagBits::eUpdateAfterBindPool);
-    descriptorLayoutInfo.setPNext(&extended_info);
-
-    vk::DescriptorSetLayoutSupport support;
-    m_context.device.getDescriptorSetLayoutSupport(&descriptorLayoutInfo, &support);
-    if (!support.supported)
-        log::exit("Mutable DescriptorSet not supported");
-    m_layout = m_context.device.createDescriptorSetLayoutUnique(descriptorLayoutInfo);*/
-
-    vk::DescriptorSetAllocateInfo descriptorSetAllocInfo;
-    descriptorSetAllocInfo.setDescriptorSetCount(1);
-    descriptorSetAllocInfo.setDescriptorPool(m_pool.get());
-    descriptorSetAllocInfo.setPSetLayouts(&m_context.bindlessLayout);
-    vk::Result res = m_context.device.allocateDescriptorSets(&descriptorSetAllocInfo, &m_descriptor);
-    assert(res == vk::Result::eSuccess);
+    for (const vk::DescriptorType& b : kStandard)
+        m_mutableDescriptorSize = std::max(m_mutableDescriptorSize, getDescriptorSizeForType(b));
 }
 
-vk::UniqueDescriptorSetLayout BindlessTable::buildBindlessLayout(const VulkanContext& context, uint32_t count,
-                                                                 bool useMutable)
+void BindlessTable::createBufferDescriptor(Buffer& buffer, uint64_t layoutSize) const
+{
+    vk::BufferUsageFlags usageFlags = vk::BufferUsageFlagBits::eShaderDeviceAddress |
+                                      vk::BufferUsageFlagBits::eResourceDescriptorBufferEXT |
+                                      vk::BufferUsageFlagBits::eSamplerDescriptorBufferEXT;
+    buffer.info.setSize(layoutSize);
+    buffer.info.setUsage(usageFlags);
+    buffer.info.setSharingMode(vk::SharingMode::eExclusive);
+
+    buffer.allocInfo.usage = VMA_MEMORY_USAGE_AUTO_PREFER_HOST;
+    buffer.allocInfo.flags = VMA_ALLOCATION_CREATE_HOST_ACCESS_SEQUENTIAL_WRITE_BIT | VMA_ALLOCATION_CREATE_MAPPED_BIT;
+
+    vmaCreateBuffer(m_context.allocator, reinterpret_cast<VkBufferCreateInfo*>(&buffer.info), &buffer.allocInfo,
+                    reinterpret_cast<VkBuffer*>(&buffer.handle), &buffer.allocation, &buffer.hostInfo);
+
+    memset(buffer.hostInfo.pMappedData, 0, layoutSize);
+}
+
+uint32_t BindlessTable::getDescriptorSizeForType(vk::DescriptorType descriptorType) const
+{
+    const vk::PhysicalDeviceDescriptorBufferPropertiesEXT& props = m_context.descBufferProperties;
+    switch (descriptorType)
+    {
+    case vk::DescriptorType::eSampler:
+        return props.samplerDescriptorSize;
+    case vk::DescriptorType::eSampledImage:
+        return props.sampledImageDescriptorSize;
+    case vk::DescriptorType::eStorageImage:
+        return props.storageImageDescriptorSize;
+    case vk::DescriptorType::eUniformTexelBuffer:
+        return props.robustUniformTexelBufferDescriptorSize;
+    case vk::DescriptorType::eStorageTexelBuffer:
+        return props.robustStorageTexelBufferDescriptorSize;
+    case vk::DescriptorType::eUniformBuffer:
+        return props.robustUniformBufferDescriptorSize;
+    case vk::DescriptorType::eStorageBuffer:
+        return props.robustStorageBufferDescriptorSize;
+    case vk::DescriptorType::eAccelerationStructureKHR:
+        return props.accelerationStructureDescriptorSize;
+    default:
+        assert(0 && "Invalid descriptor type.");
+        return 0;
+    }
+}
+
+vk::UniqueDescriptorSetLayout BindlessTable::buildBindlessLayout(const VulkanContext& context, uint32_t count)
 {
     std::vector<vk::DescriptorSetLayoutBinding> bindings;
-    std::vector<vk::DescriptorPoolSize> descriptorPoolSize;
 
     const vk::MutableDescriptorTypeListEXT list(kStandard);
-    std::vector<vk::MutableDescriptorTypeListEXT> mutable_list;
+    std::vector<vk::MutableDescriptorTypeListEXT> mutableList;
 
-    const std::initializer_list<vk::DescriptorType> types = useMutable ? kMutable : kStandard;
+    const std::initializer_list<vk::DescriptorType> types = kMutable;
     bindings.resize(types.size());
-    mutable_list.resize(types.size());
-    descriptorPoolSize.resize(types.size());
+    mutableList.resize(types.size());
     int i = 0;
     for (const vk::DescriptorType& type : types)
     {
@@ -106,10 +82,8 @@ vk::UniqueDescriptorSetLayout BindlessTable::buildBindlessLayout(const VulkanCon
         bindings[i].descriptorType = type;
         bindings[i].descriptorCount = count;
         bindings[i].stageFlags = vk::ShaderStageFlagBits::eAll;
-        descriptorPoolSize[i].type = type;
-        descriptorPoolSize[i].descriptorCount = count;
         if (type == vk::DescriptorType::eMutableEXT)
-            mutable_list[i] = list;
+            mutableList[i] = list;
         i += 1;
     }
 
@@ -122,19 +96,17 @@ vk::UniqueDescriptorSetLayout BindlessTable::buildBindlessLayout(const VulkanCon
     vk::DescriptorSetLayoutCreateInfo descriptorLayoutInfo;
     descriptorLayoutInfo.setBindings(bindings);
 
-    vk::MutableDescriptorTypeCreateInfoEXT mutable_info;
-    mutable_info.setMutableDescriptorTypeLists(mutable_list);
+    vk::MutableDescriptorTypeCreateInfoEXT mutableInfo;
+    mutableInfo.setMutableDescriptorTypeLists(mutableList);
 
     vk::DescriptorSetLayoutBindingFlagsCreateInfo extended_info;
-    constexpr vk::DescriptorBindingFlags bindlessFlags =
-        vk::DescriptorBindingFlagBits::ePartiallyBound | vk::DescriptorBindingFlagBits::eUpdateAfterBind;
+    constexpr vk::DescriptorBindingFlags bindlessFlags = vk::DescriptorBindingFlagBits::ePartiallyBound;
     std::vector<vk::DescriptorBindingFlags> binding_flags(descriptorLayoutInfo.bindingCount, bindlessFlags);
     extended_info.setBindingFlags(binding_flags);
-    if(useMutable)
-        extended_info.setPNext(&mutable_info);
+    extended_info.setPNext(&mutableInfo);
 
-    descriptorLayoutInfo.setFlags(vk::DescriptorSetLayoutCreateFlagBits::eUpdateAfterBindPool);
-    descriptorLayoutInfo.setPNext(&extended_info);
+    descriptorLayoutInfo.setFlags(vk::DescriptorSetLayoutCreateFlagBits::eDescriptorBufferEXT);
+    descriptorLayoutInfo.setPNext(&mutableInfo);
 
     vk::DescriptorSetLayoutSupport support;
     context.device.getDescriptorSetLayoutSupport(&descriptorLayoutInfo, &support);
@@ -151,20 +123,23 @@ void BindlessTable::setSampler(const SamplerPtr& sampler, uint32_t slot)
     vk::DescriptorImageInfo imageInfo;
     imageInfo.setSampler(native->handle.get());
 
-    vk::WriteDescriptorSet descriptorWriteInfo;
-    descriptorWriteInfo.setDescriptorType(type);
-    descriptorWriteInfo.setDstBinding(1);
-    descriptorWriteInfo.setDescriptorCount(1);
-    descriptorWriteInfo.setDstSet(m_descriptor);
-    descriptorWriteInfo.setDstArrayElement(slot);
-    descriptorWriteInfo.setImageInfo(imageInfo);
+    auto* cpuHandle = static_cast<std::byte*>(m_bufferDescriptor.hostInfo.pMappedData);
+    cpuHandle += m_samplerDescriptorOffset;
+    cpuHandle += slot * getDescriptorSizeForType(type);
 
-    m_context.device.updateDescriptorSets(descriptorWriteInfo, nullptr);
+    vk::DescriptorGetInfoEXT info;
+    info.setType(type);
+    info.setData(&imageInfo);
+    m_context.device.getDescriptorEXT(info, getDescriptorSizeForType(type), cpuHandle);
 }
 
 bool BindlessTable::visitTexture(const TexturePtr& texture, uint32_t slot)
 {
     auto* image = checked_cast<Texture*>(texture.get());
+
+    auto* cpuHandle = static_cast<std::byte*>(m_bufferDescriptor.hostInfo.pMappedData);
+    cpuHandle += m_mutableDescriptorOffset;
+    cpuHandle += slot * m_mutableDescriptorSize;
 
     auto type = vk::DescriptorType::eSampledImage;
 
@@ -172,15 +147,9 @@ bool BindlessTable::visitTexture(const TexturePtr& texture, uint32_t slot)
     imageInfo.setImageLayout(vk::ImageLayout::eShaderReadOnlyOptimal);
     imageInfo.setImageView(image->view());
 
-    vk::WriteDescriptorSet descriptorWriteInfo;
-    descriptorWriteInfo.setDescriptorType(type);
-    descriptorWriteInfo.setDstBinding(0);
-    descriptorWriteInfo.setDescriptorCount(1);
-    descriptorWriteInfo.setDstSet(m_descriptor);
-    descriptorWriteInfo.setDstArrayElement(slot);
-    descriptorWriteInfo.setImageInfo(imageInfo);
+    vk::DescriptorGetInfoEXT info(type, &imageInfo);
+    m_context.device.getDescriptorEXT(info, getDescriptorSizeForType(type), cpuHandle);
 
-    m_context.device.updateDescriptorSets(descriptorWriteInfo, nullptr);
     return true;
 }
 
@@ -188,33 +157,30 @@ bool BindlessTable::visitBuffer(const BufferPtr& buffer, uint32_t slot)
 {
     auto* buff = checked_cast<Buffer*>(buffer.get());
 
-    vk::WriteDescriptorSet descriptorWriteInfo;
-    vk::DescriptorBufferInfo bufferInfo;
+    auto* cpuHandle = static_cast<std::byte*>(m_bufferDescriptor.hostInfo.pMappedData);
+    cpuHandle += m_mutableDescriptorOffset;
+    cpuHandle += slot * m_mutableDescriptorSize;
+
+    vk::DescriptorAddressInfoEXT addrInfo;
+    addrInfo.address = buff->getGPUAddress();
+    addrInfo.range = buff->sizeBytes();
+    addrInfo.format = buff->format;
 
     vk::DescriptorType type = vk::DescriptorType::eStorageBuffer;
-    if(buff->info.usage & vk::BufferUsageFlagBits::eUniformBuffer)
+    if (buff->info.usage & vk::BufferUsageFlagBits::eUniformBuffer)
         type = vk::DescriptorType::eUniformBuffer;
-    if(buff->info.usage & vk::BufferUsageFlagBits::eStorageTexelBuffer)
-    {
+    if (buff->info.usage & vk::BufferUsageFlagBits::eStorageTexelBuffer)
         type = vk::DescriptorType::eStorageTexelBuffer;
-        descriptorWriteInfo.setTexelBufferView(buff->view());
-    }
-    else
-    {
-        bufferInfo.setBuffer(buff->handle);
-        bufferInfo.setRange(VK_WHOLE_SIZE);
-        bufferInfo.setOffset(0);
-        descriptorWriteInfo.setBufferInfo(bufferInfo);
-    }
 
-    descriptorWriteInfo.setDescriptorType(type);
-    descriptorWriteInfo.setDstBinding(0);
-    descriptorWriteInfo.setDescriptorCount(1);
-    descriptorWriteInfo.setDstSet(m_descriptor);
-    descriptorWriteInfo.setDstArrayElement(slot);
+    vk::DescriptorGetInfoEXT info(type, &addrInfo);
+    m_context.device.getDescriptorEXT(info, getDescriptorSizeForType(type), cpuHandle);
 
-    m_context.device.updateDescriptorSets(descriptorWriteInfo, nullptr);
     return true;
+}
+
+vk::DeviceAddress BindlessTable::bufferDescriptorGPUAddress() const
+{
+    return m_bufferDescriptor.getGPUAddress();
 }
 
 BindlessTablePtr Device::createBindlessTable(uint32_t count)

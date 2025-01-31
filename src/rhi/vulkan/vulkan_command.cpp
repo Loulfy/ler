@@ -494,10 +494,18 @@ namespace ler::rhi::vulkan
         cmdBuf.bindPipeline(native->bindPoint, native->handle.get());
 
         auto* bindless = checked_cast<BindlessTable*>(table.get());
-        cmdBuf.bindDescriptorSets(native->bindPoint, native->pipelineLayout.get(), 0, bindless->m_descriptor, nullptr);
+
+        vk::DescriptorBufferBindingInfoEXT bindingInfo;
+        bindingInfo.setAddress(bindless->bufferDescriptorGPUAddress());
+        bindingInfo.setUsage(vk::BufferUsageFlagBits::eResourceDescriptorBufferEXT | vk::BufferUsageFlagBits::eSamplerDescriptorBufferEXT);
+        cmdBuf.bindDescriptorBuffersEXT(bindingInfo);
+
+        constexpr uint32_t bufferId = 0;
+        constexpr vk::DeviceSize offset = 0;
+        cmdBuf.setDescriptorBufferOffsetsEXT(native->bindPoint, native->pipelineLayout.get(), 0, 1, &bufferId, &offset);
     }
 
-    static vk::ShaderStageFlags convertShaderStage(ShaderType stage)
+    static constexpr vk::ShaderStageFlags convertShaderStage(ShaderType stage)
     {
         switch(stage)
         {
