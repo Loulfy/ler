@@ -10,6 +10,7 @@
 #include "sys/ioring.hpp"
 
 #include <semaphore>
+#include <memory_resource>
 
 namespace ler::rhi
 {

@@ -78,13 +78,13 @@ class CullingCommand : public render::RenderGraphPass
         res.outputs.emplace_back();
         res.outputs.back().name = "drawBuffer";
         res.outputs.back().type = render::RR_StorageBuffer;
-        desc.byteSize = sizeof(render::DrawCommand) * params.meshList->getInstanceCount();
+        desc.sizeInBytes = sizeof(render::DrawCommand) * params.meshList->getInstanceCount();
         res.outputs.back().resource = device->createBuffer(desc);
 
         res.outputs.emplace_back();
         res.outputs.back().name = "countBuffer";
         res.outputs.back().type = render::RR_StorageBuffer;
-        desc.byteSize = 256;
+        desc.sizeInBytes = 16;
         res.outputs.back().resource = device->createBuffer(desc);
 
         res.inputs.emplace_back();
@@ -93,6 +93,10 @@ class CullingCommand : public render::RenderGraphPass
 
         res.inputs.emplace_back();
         res.inputs.back().name = "instances";
+        res.inputs.back().type = render::RR_ReadOnlyBuffer;
+
+        res.inputs.emplace_back();
+        res.inputs.back().name = "meshes";
         res.inputs.back().type = render::RR_ReadOnlyBuffer;
     }
 };

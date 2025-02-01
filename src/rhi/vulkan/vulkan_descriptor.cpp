@@ -1,5 +1,5 @@
 //
-// Created by loulfy on 13/09/2024.
+// Created by Loulfy on 13/09/2024.
 //
 
 #include "rhi/vulkan.hpp"
@@ -160,7 +160,7 @@ bool BindlessTable::visitBuffer(const BufferPtr& buffer, uint32_t slot)
 
     vk::DescriptorAddressInfoEXT addrInfo;
     addrInfo.address = buff->getGPUAddress();
-    addrInfo.range = buff->sizeBytes();
+    addrInfo.range = buff->sizeInBytes();
     addrInfo.format = buff->format;
 
     vk::DescriptorType type = vk::DescriptorType::eStorageBuffer;

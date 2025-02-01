@@ -2,6 +2,7 @@ cmake_minimum_required(VERSION 3.25)
 project(gdev)
 
 set(CMAKE_CXX_STANDARD 23)
+set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 
 find_package(Vulkan)
 find_package(unofficial-imgui-node-editor CONFIG REQUIRED)

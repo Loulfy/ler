@@ -1,0 +1,12 @@
+[project]
+name = "ler"
+version = "0.0.1"
+
+# Optional, adding this will enable direct links from the documentation
+# to your source code.
+git_repo_url = "https://github.com/Loulfy/ler/"
+git_default_branch = "main"
+
+[paths]
+compile_commands = "cmake-build-debug/compile_commands.json"
+output_dir = "docs"

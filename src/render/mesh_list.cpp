@@ -21,13 +21,13 @@ void RenderMeshList::installStaticScene(const rhi::DevicePtr& device,
     rhi::BufferDesc bufDesc;
     bufDesc.debugName = "instanceBuffer";
     bufDesc.stride = sizeof(DrawInstance);
-    bufDesc.byteSize = sizeof(DrawInstance) * m_drawInstances.size();
+    bufDesc.sizeInBytes = sizeof(DrawInstance) * m_drawInstances.size();
     m_instanceBuffer = device->createBuffer(bufDesc);
 
-    rhi::BufferPtr staging = device->createBuffer(bufDesc.byteSize, true);
-    staging->uploadFromMemory(m_drawInstances.data(), bufDesc.byteSize);
+    rhi::BufferPtr staging = device->createBuffer(bufDesc.sizeInBytes, true);
+    staging->uploadFromMemory(m_drawInstances.data(), bufDesc.sizeInBytes);
     rhi::CommandPtr command = device->createCommand(rhi::QueueType::Graphics);
-    command->copyBuffer(staging, m_instanceBuffer, bufDesc.byteSize, 0);
+    command->copyBuffer(staging, m_instanceBuffer, bufDesc.sizeInBytes, 0);
     device->submitOneShot(command);
 }
 

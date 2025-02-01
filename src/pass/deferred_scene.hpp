@@ -106,28 +106,28 @@ class DeferredScene final : public rhi::IRenderPass, public render::IMeshRendere
         desc.isUAV = true;
         desc.isDrawIndirectArgs = true;
 
-        desc.byteSize = 16;
+        desc.sizeInBytes = 16;
         desc.debugName = "countBuffer";
         m_countBuffer = device->createBuffer(desc);
 
         desc.stride = sizeof(render::DrawCommand);
         desc.debugName = "drawBuffer";
-        desc.byteSize = desc.stride * params.meshList->getInstanceCount();
+        desc.sizeInBytes = desc.stride * params.meshList->getInstanceCount();
         m_drawBuffer = device->createBuffer(desc);
 
         desc.isUAV = false;
         desc.isDrawIndirectArgs = false;
         desc.isConstantBuffer = true;
         desc.debugName = "frustumBuffer";
-        desc.byteSize = sizeof(render::Frustum);
+        desc.sizeInBytes = sizeof(render::Frustum);
         m_frustumBuffer = device->createBuffer(desc);
 
         desc.isReadBack = true;
         desc.isConstantBuffer = false;
         desc.debugName = "readBack";
-        desc.byteSize = m_frustumBuffer->sizeBytes();
+        desc.sizeInBytes = m_frustumBuffer->sizeInBytes();
         m_readBack = device->createBuffer(desc);
-        m_upload = device->createBuffer(desc.byteSize, true);
+        m_upload = device->createBuffer(desc.sizeInBytes, true);
         m_test = device->createBuffer(16, true);
         static std::array<uint32_t,4> clears;
         clears.fill(0u);
@@ -172,7 +172,7 @@ class DeferredScene final : public rhi::IRenderPass, public render::IMeshRendere
 
         command->addBufferBarrier(m_frustumBuffer, rhi::CopyDest);
         //command->addBufferBarrier(m_staging, rhi::CopySrc);
-        command->copyBuffer(m_upload, m_frustumBuffer, m_upload->sizeBytes(), 0);
+        command->copyBuffer(m_upload, m_frustumBuffer, m_upload->sizeInBytes(), 0);
         command->addBufferBarrier(m_frustumBuffer, rhi::ConstantBuffer);
 
         command->bindPipeline(m_cullPass, m_table);
@@ -181,7 +181,7 @@ class DeferredScene final : public rhi::IRenderPass, public render::IMeshRendere
 
         command->addBufferBarrier(m_countBuffer, rhi::CopySrc);
         //command->addBufferBarrier(m_staging, rhi::CopyDest);
-        command->copyBuffer(m_countBuffer, m_readBack, m_countBuffer->sizeBytes(), 0);
+        command->copyBuffer(m_countBuffer, m_readBack, m_countBuffer->sizeInBytes(), 0);
         command->addBufferBarrier(m_countBuffer, rhi::Indirect);
         command->addBufferBarrier(m_drawBuffer, rhi::Indirect);
 

@@ -15,7 +15,7 @@ void MeshBuffers::allocate(const rhi::DevicePtr& device, const flatbuffers::Vect
     {
         rhi::BufferDesc desc;
         rhi::BufferPtr buffer;
-        desc.byteSize = bufferEntry->byte_length();
+        desc.sizeInBytes = bufferEntry->byte_length();
         switch (bufferEntry->type())
         {
         case scene::BufferType_Index:
@@ -87,25 +87,25 @@ void MeshBuffers::allocate(const rhi::DevicePtr& device, rhi::BindlessTablePtr& 
     rhi::BufferDesc meshDesc;
     meshDesc.debugName = "meshBuffer";
     meshDesc.stride = sizeof(DrawMesh);
-    meshDesc.byteSize = sizeof(DrawMesh) * m_drawMeshes.size();
+    meshDesc.sizeInBytes = sizeof(DrawMesh) * m_drawMeshes.size();
     m_meshBuffer = device->createBuffer(meshDesc);
 
     rhi::BufferDesc skinDesc;
     skinDesc.stride = sizeof(DrawSkin);
-    skinDesc.byteSize = sizeof(DrawSkin) * m_drawSkins.size();
+    skinDesc.sizeInBytes = sizeof(DrawSkin) * m_drawSkins.size();
     m_skinBuffer = device->createBuffer(skinDesc);
 
     rhi::CommandPtr command;
-    rhi::BufferPtr staging = device->createBuffer(std::max(meshDesc.byteSize, skinDesc.byteSize), true);
+    rhi::BufferPtr staging = device->createBuffer(std::max(meshDesc.sizeInBytes, skinDesc.sizeInBytes), true);
 
     command = device->createCommand(rhi::QueueType::Graphics);
-    staging->uploadFromMemory(m_drawMeshes.data(), meshDesc.byteSize);
-    command->copyBuffer(staging, m_meshBuffer, meshDesc.byteSize, 0);
+    staging->uploadFromMemory(m_drawMeshes.data(), meshDesc.sizeInBytes);
+    command->copyBuffer(staging, m_meshBuffer, meshDesc.sizeInBytes, 0);
     device->submitOneShot(command);
 
     command = device->createCommand(rhi::QueueType::Graphics);
-    staging->uploadFromMemory(m_drawSkins.data(), skinDesc.byteSize);
-    command->copyBuffer(staging, m_skinBuffer, skinDesc.byteSize, 0);
+    staging->uploadFromMemory(m_drawSkins.data(), skinDesc.sizeInBytes);
+    command->copyBuffer(staging, m_skinBuffer, skinDesc.sizeInBytes, 0);
     device->submitOneShot(command);
 
     //storage->requestLoadTexture(*m_latch, texturePool, m_files);

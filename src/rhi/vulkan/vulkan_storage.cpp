@@ -1,5 +1,5 @@
 //
-// Created by loulfy on 06/01/2024.
+// Created by Loulfy on 06/01/2024.
 //
 
 #include "rhi/vulkan.hpp"
@@ -12,7 +12,7 @@ Storage::Storage(Device* device, std::shared_ptr<coro::thread_pool>& tp) : Commo
     std::vector<sys::IoService::BufferInfo> buffers;
     for (const BufferPtr& staging : m_stagings)
     {
-        auto* buff = checked_cast<Buffer*>(staging.get());
+        const auto* buff = checked_cast<Buffer*>(staging.get());
         auto* data = static_cast<std::byte*>(buff->hostInfo.pMappedData);
         buffers.emplace_back(data, kStagingSize);
     }
@@ -42,22 +42,22 @@ static void queueTexture(const ReadOnlyFilePtr& file, sys::IoService::FileLoadRe
 
 coro::task<> Storage::makeSingleTextureTask(coro::latch& latch, BindlessTablePtr table, ReadOnlyFilePtr file)
 {
-    TexturePtr texture;
     sys::IoService::FileLoadRequest request;
     queueTexture(file, request);
-    int bufferIndex = acquireStaging();
+    const int bufferIndex = acquireStaging();
     request.buffIndex = bufferIndex;
     co_await m_ios.submit(request);
 
-    img::ITexture* tex = factoryTexture(file, m_ios.getMemPtr(bufferIndex));
+    const img::ITexture* tex = factoryTexture(file, m_ios.getMemPtr(bufferIndex));
 
     TextureDesc desc = tex->desc();
-    std::span levels = tex->levels();
-    uint64_t head = tex->headOffset();
+    const std::span levels = tex->levels();
+    const uint64_t head = tex->headOffset();
     desc.debugName = file->getFilename();
-    texture = m_device->createTexture(desc);
-    uint32_t texId = table->allocate();
-    table->setResource(texture, texId);
+    TexturePtr texture = m_device->createTexture(desc);
+    const uint32_t texIndex = table->allocate();
+    log::info("Load texture {:03}: {}", texIndex, desc.debugName);
+    table->setResource(texture, texIndex);
 
     request.fileLength = tex->getDataSize();
     request.fileOffset = head;
@@ -72,7 +72,6 @@ coro::task<> Storage::makeSingleTextureTask(coro::latch& latch, BindlessTablePtr
         Subresource sub;
         sub.index = mip;
         sub.offset = level.byteOffset - head;
-        // sub.offset = level.byteOffset;
         sub.width = desc.width >> mip;
         sub.height = desc.height >> mip;
 
@@ -98,13 +97,12 @@ coro::task<> Storage::makeMultiTextureTask(coro::latch& latch, BindlessTablePtr 
     uint32_t offset = capacity;
     int bufferId;
 
-    // std::vector<img::ITexture*> images;
-    // images.reserve(files.size());
     std::vector<sys::IoService::FileLoadRequest> requests(files.size());
     for (int i = 0; i < files.size(); ++i)
     {
         queueTexture(files[i], requests[i]);
-        const uint64_t byteSizes = align(files[i]->sizeBytes(), 16ull);
+        static constexpr uint64_t alignment = 16;
+        const uint64_t byteSizes = align(files[i]->sizeInBytes(), alignment);
 
         if (offset + byteSizes > capacity)
         {
@@ -115,7 +113,7 @@ coro::task<> Storage::makeMultiTextureTask(coro::latch& latch, BindlessTablePtr 
 
         requests[i].buffOffset = offset;
         requests[i].buffIndex = bufferId;
-        requests[i].fileLength = files[i]->sizeBytes();
+        requests[i].fileLength = files[i]->sizeInBytes();
 
         offset += byteSizes;
     }
@@ -126,12 +124,10 @@ coro::task<> Storage::makeMultiTextureTask(coro::latch& latch, BindlessTablePtr 
 
     for (size_t i = 0; i < files.size(); ++i)
     {
-        const auto& file = files[i];
+        const ReadOnlyFilePtr& file = files[i];
         const sys::IoService::FileLoadRequest& req = requests[i];
         std::byte* data = m_ios.getMemPtr(req.buffIndex);
-        // img::ITexture* tex = images[i];
-        // tex->initFromBuffer(data + req.buffOffset);
-        img::ITexture* tex = factoryTexture(file, data + req.buffOffset);
+        const img::ITexture* tex = factoryTexture(file, data + req.buffOffset);
         std::span levels = tex->levels();
         TextureDesc desc = tex->desc();
         desc.debugName = file->getFilename();
@@ -324,7 +320,7 @@ coro::task<> Storage::makeBufferTask(coro::latch& latch, ReadOnlyFilePtr file, B
                                      uint64_t fileOffset)
 {
     const int bufferId = acquireStaging();
-    BufferPtr staging = getStaging(bufferId);
+    const BufferPtr staging = getStaging(bufferId);
 
     sys::IoService::FileLoadRequest request;
     request.file = &checked_cast<ReadOnlyFile*>(file.get())->handle;

@@ -1,5 +1,5 @@
 //
-// Created by loulfy on 21/09/2024.
+// Created by Loulfy on 21/09/2024.
 //
 
 #include "rhi/vulkan.hpp"
@@ -16,10 +16,10 @@ ImGuiPass::~ImGuiPass()
 
 void ImGuiPass::create(const DevicePtr& device, const SwapChainPtr& swapChain)
 {
-    auto* dev = checked_cast<Device*>(device.get());
+    const auto* dev = checked_cast<Device*>(device.get());
     const VulkanContext& context = dev->getContext();
     vk::PipelineRenderingCreateInfoKHR rendering;
-    vk::Format format = Device::convertFormat(swapChain->format());
+    const vk::Format format = Device::convertFormat(swapChain->format());
     std::initializer_list<vk::Format> formats = { format };
     rendering.setColorAttachmentFormats(formats);
 
@@ -70,7 +70,7 @@ void ImGuiPass::render(TexturePtr& backBuffer, CommandPtr& command)
     // Record dear ImGui primitives into command buffer
     ImDrawData* draw_data = ImGui::GetDrawData();
 
-    rhi::RenderingInfo pass;
+    RenderingInfo pass;
     pass.viewport = backBuffer->extent();
     pass.colors[0].texture = backBuffer;
     pass.colors[0].loadOp = AttachmentLoadOp::Load;

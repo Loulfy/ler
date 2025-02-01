@@ -49,7 +49,7 @@ img::ITexture* CommonStorage::factoryTexture(const ReadOnlyFilePtr& file, std::b
         tex->init();
         return tex;
     }
-    else if (ext == ".ktx" || ext == ".ktx2")
+    if (ext == ".ktx" || ext == ".ktx2")
     {
         auto* tex = alloc.new_object<img::KtxTexture>();
         memcpy(tex->identifier, metadata, img::KtxTexture::kBytesToRead);

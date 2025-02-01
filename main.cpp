@@ -265,13 +265,16 @@ class TestIndirect final : public rhi::IRenderPass, public render::IMeshRenderer
         pso.depthAttach = rhi::Format::D32;
         pso.indirectDraw = true;
         pipeline = device->createGraphicsPipeline(modules, pso);
+    }
 
+    void resize(const rhi::DevicePtr& device, const rhi::Extent& viewport) override
+    {
         rhi::TextureDesc depthDesc;
         depthDesc.debugName = "depth";
         depthDesc.isRenderTarget = true;
         depthDesc.format = rhi::Format::D32;
-        depthDesc.width = swapChain->extent().width;
-        depthDesc.height = swapChain->extent().height;
+        depthDesc.width = viewport.width;
+        depthDesc.height = viewport.height;
         depth = device->createTexture(depthDesc);
         auto cmd = device->createCommand(rhi::QueueType::Graphics);
         cmd->addImageBarrier(depth, ler::rhi::DepthWrite);
@@ -313,9 +316,9 @@ class TestIndirect final : public rhi::IRenderPass, public render::IMeshRenderer
     void render(rhi::TexturePtr& backBuffer, rhi::CommandPtr& command, const render::RenderParams& params) override
     {
         command->addBufferBarrier(countBuffer, rhi::CopySrc);
-        command->copyBuffer(countBuffer, readback, 256, 0);
+        command->copyBuffer(countBuffer, readback, 16, 0);
         command->addBufferBarrier(countBuffer, rhi::CopyDest);
-        command->copyBuffer(clearer, countBuffer, 256, 0);
+        command->copyBuffer(clearer, countBuffer, 16, 0);
         uint32_t num;
         readback->getUint(&num);
         ImGui::Begin("Hello LER", nullptr, ImGuiWindowFlags_NoResize);
@@ -406,20 +409,20 @@ class TestIndirect final : public rhi::IRenderPass, public render::IMeshRenderer
         //buffDesc.isConstantBuffer = true;
         buffDesc.debugName = "frustBuffer";
         buffDesc.stride = sizeof(render::Frustum);
-        buffDesc.byteSize = sizeof(render::Frustum);
+        buffDesc.sizeInBytes = sizeof(render::Frustum);
         buffDesc.isConstantBuffer = true;
         frustBuffer = device->createBuffer(buffDesc);
 
-        staging = device->createBuffer(buffDesc.byteSize, true);
-        clearer = device->createBuffer(256, true);
+        staging = device->createBuffer(buffDesc.sizeInBytes, true);
+        clearer = device->createBuffer(16, true);
         std::array<uint32_t, 64> values = {};
         values.fill(1);
         values[0] = 0;
         values[1] = 0;
-        clearer->uploadFromMemory(values.data(), 256);
+        clearer->uploadFromMemory(values.data(), 16);
         rhi::BufferDesc rDesc;
         rDesc.isReadBack = true;
-        rDesc.byteSize = 256;
+        rDesc.sizeInBytes = 16;
         readback = device->createBuffer(rDesc);
         auto cmd = device->createCommand(rhi::QueueType::Graphics);
         cmd->addBufferBarrier(readback, rhi::CopyDest);
@@ -434,13 +437,13 @@ class TestIndirect final : public rhi::IRenderPass, public render::IMeshRenderer
         buffDesc.debugName = "drawsBuffer";
         buffDesc.isICB = true;
         buffDesc.stride = sizeof(render::DrawCommand);
-        buffDesc.byteSize = sizeof(render::DrawCommand) * meshList.getInstanceCount();
+        buffDesc.sizeInBytes = sizeof(render::DrawCommand) * meshList.getInstanceCount();
         drawsBuffer = device->createBuffer(buffDesc);
 
         buffDesc.debugName = "countBuffer";
         buffDesc.isICB = false;
         buffDesc.stride = 0;
-        buffDesc.byteSize = 256;
+        buffDesc.sizeInBytes = 16;
         buffDesc.format = rhi::Format::R32_UINT;
         countBuffer = device->createBuffer(buffDesc);
 
@@ -450,7 +453,7 @@ class TestIndirect final : public rhi::IRenderPass, public render::IMeshRenderer
         buffDesc.isUAV = false;
         buffDesc.isStaging = true;
         buffDesc.stride = sizeof(render::DrawConstant);
-        buffDesc.byteSize = sizeof(render::DrawConstant);
+        buffDesc.sizeInBytes = sizeof(render::DrawConstant);
         drawConstant = device->createBuffer(buffDesc);
 
         buffDesc.debugName = "cullConstant";
@@ -474,7 +477,7 @@ int main()
     cfg.debug = true;
     cfg.width = 1080;
     cfg.height = 720;
-    cfg.api = rhi::GraphicsAPI::METAL;
+    cfg.api = rhi::GraphicsAPI::VULKAN;
     cfg.vsync = true;
     app::DesktopApp app(cfg);
     //app.loadScene("scene.mesh");
