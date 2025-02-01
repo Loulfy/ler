@@ -203,7 +203,7 @@ class DeferredScene final : public rhi::IRenderPass, public render::IMeshRendere
         pass.colors[0].texture = backBuffer;
         command->beginRendering(pass);
         meshes->bind(command, false);
-        command->drawIndirectIndexed(m_wirePass, m_drawBuffer, m_countBuffer, params.meshList->getInstanceCount(),
+        command->drawIndirectIndexedPrimitives(m_wirePass, m_drawBuffer, m_countBuffer, params.meshList->getInstanceCount(),
                                      sizeof(render::DrawCommand));
         command->endRendering();
         command->endDebugEvent();

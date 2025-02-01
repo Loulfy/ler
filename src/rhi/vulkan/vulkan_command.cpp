@@ -114,7 +114,7 @@ namespace ler::rhi::vulkan
 
         for (size_t i = 0; i < ppCmd.size(); i++)
         {
-            CommandPtr commandBuffer = ppCmd[i];
+            const CommandPtr& commandBuffer = ppCmd[i];
 
             // It's time!
             commandBuffer->cmdBuf.end();
@@ -448,17 +448,17 @@ namespace ler::rhi::vulkan
         cmdBuf.bindVertexBuffers(slot, 1, &buff->handle, &offset);
     }
 
-    void Command::drawIndexed(uint32_t vertexCount) const
+    void Command::drawPrimitives(uint32_t vertexCount) const
     {
         cmdBuf.draw(vertexCount, 1, 0, 0);
     }
 
-    void Command::drawIndexedInstanced(uint32_t indexCount, uint32_t firstIndex, int32_t firstVertex, uint32_t firstId) const
+    void Command::drawIndexedPrimitives(uint32_t indexCount, uint32_t firstIndex, int32_t firstVertex, uint32_t instanceId) const
     {
-        cmdBuf.drawIndexed(indexCount, 1, firstIndex, firstVertex, firstId);
+        cmdBuf.drawIndexed(indexCount, 1, firstIndex, firstVertex, instanceId);
     }
 
-    void Command::drawIndirectIndexed(const rhi::PipelinePtr&, const BufferPtr& commands, const BufferPtr& count, uint32_t maxDrawCount, uint32_t stride)
+    void Command::drawIndirectIndexedPrimitives(const rhi::PipelinePtr&, const BufferPtr& commands, const BufferPtr& count, uint32_t maxDrawCount, uint32_t stride)
     {
         constexpr static vk::DeviceSize offset = 0;
         auto* drawsBuff = checked_cast<Buffer*>(commands.get());
@@ -466,7 +466,7 @@ namespace ler::rhi::vulkan
         cmdBuf.drawIndexedIndirectCount(drawsBuff->handle, offset, countBuff->handle, sizeof(uint32_t), maxDrawCount, stride);
     }
 
-    void Command::encodeIndirectIndexed(const EncodeIndirectIndexedDrawDesc& desc)
+    void Command::encodeIndirectIndexedPrimitives(const EncodeIndirectIndexedDrawDesc& desc)
     {
         // Compatibility with METAL, not needed!
     }

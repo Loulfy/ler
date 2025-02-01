@@ -283,18 +283,18 @@ void Command::bindVertexBuffers(uint32_t slot, const BufferPtr& indexBuffer)
     m_commandList->IASetVertexBuffers(slot, 1, &view);
 }
 
-void Command::drawIndexed(uint32_t vertexCount) const
+void Command::drawPrimitives(uint32_t vertexCount) const
 {
     m_commandList->DrawInstanced(vertexCount, 1, 0, 0);
 }
 
-void Command::drawIndexedInstanced(uint32_t indexCount, uint32_t firstIndex, int32_t firstVertex,
+void Command::drawIndexedPrimitives(uint32_t indexCount, uint32_t firstIndex, int32_t firstVertex,
                                    uint32_t firstId) const
 {
     m_commandList->DrawIndexedInstanced(indexCount, 1, firstIndex, firstVertex, firstId);
 }
 
-void Command::drawIndirectIndexed(const rhi::PipelinePtr& pipeline, const BufferPtr& commands, const BufferPtr& count,
+void Command::drawIndirectIndexedPrimitives(const rhi::PipelinePtr& pipeline, const BufferPtr& commands, const BufferPtr& count,
                                   uint32_t maxDrawCount, uint32_t stride)
 {
     auto* drawsBuff = checked_cast<Buffer*>(commands.get());

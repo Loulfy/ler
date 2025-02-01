@@ -276,10 +276,10 @@ namespace ler::rhi
         virtual void bindPipeline(const PipelinePtr& pipeline, const BindlessTablePtr& table) = 0;
         virtual void setConstant(const BufferPtr& buffer, ShaderType stage) = 0;
         virtual void pushConstant(const PipelinePtr& pipeline, ShaderType stage, uint32_t slot, const void* data, uint8_t size) = 0;
-        virtual void drawIndexed(uint32_t vertexCount) const = 0;
-        virtual void drawIndexedInstanced(uint32_t indexCount, uint32_t firstIndex, int32_t firstVertex, uint32_t firstId) const = 0;
-        virtual void encodeIndirectIndexed(const EncodeIndirectIndexedDrawDesc& desc) = 0;
-        virtual void drawIndirectIndexed(const PipelinePtr& pipeline, const BufferPtr& commands, const BufferPtr& count, uint32_t maxDrawCount, uint32_t stride) = 0;
+        virtual void drawPrimitives(uint32_t vertexCount) const = 0;
+        virtual void drawIndexedPrimitives(uint32_t indexCount, uint32_t firstIndex, int32_t firstVertex, uint32_t instanceId) const = 0;
+        virtual void encodeIndirectIndexedPrimitives(const EncodeIndirectIndexedDrawDesc& desc) = 0;
+        virtual void drawIndirectIndexedPrimitives(const PipelinePtr& pipeline, const BufferPtr& commands, const BufferPtr& count, uint32_t maxDrawCount, uint32_t stride) = 0;
         virtual void dispatch(uint32_t x, uint32_t y, uint32_t z) = 0;
         virtual void endRendering() const = 0;
         virtual void beginRendering(const RenderingInfo& renderingInfo) = 0;

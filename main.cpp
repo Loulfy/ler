@@ -78,7 +78,7 @@ class TestLoadOneTex final : public rhi::IRenderPass
         command->beginRendering(pass);
         command->bindPipeline(pipeline, table);
         command->pushConstant(pipeline, rhi::ShaderType::Pixel, 0, &texId, sizeof(uint32_t));
-        command->drawIndexed(4);
+        command->drawPrimitives(4);
         command->endRendering();
 
         ImGui::Begin("Hello ImGui", nullptr, ImGuiWindowFlags_NoResize);
@@ -185,7 +185,7 @@ class TestForward final : public rhi::IRenderPass, public render::IMeshRenderer
         {
             const render::DrawInstance& draw = meshList.getInstance(i);
             const render::IndexedMesh& mesh = meshList.getMesh(draw.meshIndex);
-            command->drawIndexedInstanced(mesh.countIndex, mesh.firstIndex, mesh.firstVertex, i);
+            command->drawIndexedPrimitives(mesh.countIndex, mesh.firstIndex, mesh.firstVertex, i);
         }
         //command->drawIndirectIndexed(pipeline, drawsBuffer, countBuffer, meshList.getInstanceCount(), sizeof(render::DrawCommand));
         command->endRendering();
@@ -373,7 +373,7 @@ class TestIndirect final : public rhi::IRenderPass, public render::IMeshRenderer
         encoder.drawsBuffer = drawsBuffer;
         encoder.countBuffer = countBuffer;
         encoder.table = table;
-        command->encodeIndirectIndexed(encoder);
+        command->encodeIndirectIndexedPrimitives(encoder);
 
         command->beginRendering(pass);
         command->bindPipeline(pipeline, table);
@@ -389,7 +389,7 @@ class TestIndirect final : public rhi::IRenderPass, public render::IMeshRenderer
             const render::IndexedMesh& mesh = meshList.getMesh(draw.meshIndex);
             command->drawIndexedInstanced(mesh.countIndex, mesh.firstIndex, mesh.firstVertex, i);
         }*/
-        command->drawIndirectIndexed(pipeline, drawsBuffer, countBuffer, meshList.getInstanceCount(), sizeof(render::DrawCommand));
+        command->drawIndirectIndexedPrimitives(pipeline, drawsBuffer, countBuffer, meshList.getInstanceCount(), sizeof(render::DrawCommand));
         command->endRendering();
     }
 

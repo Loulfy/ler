@@ -170,10 +170,10 @@ class Command final : public ICommand
     void bindPipeline(const rhi::PipelinePtr& pipeline, const BindlessTablePtr& table) override;
     void setConstant(const BufferPtr& buffer, ShaderType stage) override;
     void pushConstant(const rhi::PipelinePtr& pipeline, ShaderType stage, uint32_t slot, const void* data, uint8_t size) override;
-    void drawIndexed(uint32_t vertexCount) const override;
-    void drawIndexedInstanced(uint32_t indexCount, uint32_t firstIndex, int32_t firstVertex, uint32_t firstId) const override;
-    void encodeIndirectIndexed(const EncodeIndirectIndexedDrawDesc& desc) override;
-    void drawIndirectIndexed(const rhi::PipelinePtr& pipeline, const BufferPtr& commands, const BufferPtr& count, uint32_t maxDrawCount, uint32_t stride) override;
+    void drawPrimitives(uint32_t vertexCount) const override;
+    void drawIndexedPrimitives(uint32_t indexCount, uint32_t firstIndex, int32_t firstVertex, uint32_t instanceId) const override;
+    void encodeIndirectIndexedPrimitives(const EncodeIndirectIndexedDrawDesc& desc) override;
+    void drawIndirectIndexedPrimitives(const rhi::PipelinePtr& pipeline, const BufferPtr& commands, const BufferPtr& count, uint32_t maxDrawCount, uint32_t stride) override;
     void dispatch(uint32_t x, uint32_t y, uint32_t z) override;
     void endRendering() const override;
     void beginRendering(const RenderingInfo& renderingInfo) override;

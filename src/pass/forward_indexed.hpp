@@ -61,7 +61,7 @@ class ForwardIndexed : public render::RenderGraphPass
         {
             const render::DrawInstance& draw = meshList->getInstance(i);
             const render::IndexedMesh& mesh = meshList->getMesh(draw.meshIndex);
-            cmd->drawIndexedInstanced(mesh.countIndex, mesh.firstIndex, mesh.firstVertex, i);
+            cmd->drawIndexedPrimitives(mesh.countIndex, mesh.firstIndex, mesh.firstVertex, i);
         }
     }
     [[nodiscard]] rhi::PipelinePtr getPipeline() const override

@@ -196,21 +196,21 @@ void Command::pushConstant(const PipelinePtr& pipeline, ShaderType stage, uint32
     //m_context.pushConstantBuffer->didModifyRange(NS::Range(offset, size));
 }
 
-void Command::drawIndexed(uint32_t vertexCount) const
+void Command::drawPrimitives(uint32_t vertexCount) const
 {
     assert(m_renderCommandEncoder);
     IRRuntimeDrawPrimitives(m_renderCommandEncoder, MTL::PrimitiveTypeTriangleStrip, 0, vertexCount, 1);
 }
 
-void Command::drawIndexedInstanced(uint32_t indexCount, uint32_t firstIndex, int32_t firstVertex,
-                                   uint32_t firstId) const
+void Command::drawIndexedPrimitives(uint32_t indexCount, uint32_t firstIndex, int32_t firstVertex,
+                                   uint32_t instanceId) const
 {
     assert(m_renderCommandEncoder);
     IRRuntimeDrawIndexedPrimitives(m_renderCommandEncoder, MTL::PrimitiveTypeTriangle, indexCount, MTL::IndexTypeUInt32,
                                    m_indexBuffer, firstIndex * sizeof(uint32_t), 1, firstVertex, firstId);
 }
 
-void Command::encodeIndirectIndexed(const EncodeIndirectIndexedDrawDesc& desc)
+void Command::encodeIndirectIndexedPrimitives(const EncodeIndirectIndexedDrawDesc& desc)
 {
     const auto* drawsBuff = checked_cast<Buffer*>(desc.drawsBuffer.get());
     const auto* countBuff = checked_cast<Buffer*>(desc.countBuffer.get());
@@ -264,7 +264,7 @@ void Command::encodeIndirectIndexed(const EncodeIndirectIndexedDrawDesc& desc)
     m_computeCommandEncoder->endEncoding();
 }
 
-void Command::drawIndirectIndexed(const PipelinePtr& pipeline, const BufferPtr& commands, const BufferPtr& count,
+void Command::drawIndirectIndexedPrimitives(const PipelinePtr& pipeline, const BufferPtr& commands, const BufferPtr& count,
                                   uint32_t maxDrawCount, uint32_t stride)
 {
     assert(m_renderCommandEncoder);
