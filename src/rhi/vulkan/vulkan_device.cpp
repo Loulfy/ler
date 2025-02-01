@@ -66,6 +66,7 @@ namespace ler::rhi::vulkan
         VulkanFeatures features;
         features.apiVersion = p.get<vk::PhysicalDeviceProperties2>().properties.apiVersion;
         features.drawIndirectCount = f.get<vk::PhysicalDeviceVulkan12Features>().drawIndirectCount;
+        features.multiDrawIndirect = f.get<vk::PhysicalDeviceFeatures2>().features.multiDrawIndirect;
 
         if(supportedExtensionSet.contains(VK_KHR_RAY_QUERY_EXTENSION_NAME))
             features.rayTracing = true;
@@ -138,6 +139,7 @@ namespace ler::rhi::vulkan
         log::info("HostBuffer: {}", features.hostBuffer);
         log::info("DescriptorBuffer: {}", features.descriptorBuffer);
         log::info("MutableDescriptor: {}", features.mutableDescriptor);
+        log::info("MultiDrawIndirect: {}", features.multiDrawIndirect);
         log::info("DrawIndirectCount: {}", features.drawIndirectCount);
         log::info("SubgroupSize: {}", subgroupProps.subgroupSize);
         log::info("Subgroup Support: {}", vk::to_string(subgroupProps.supportedOperations));

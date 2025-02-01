@@ -57,6 +57,7 @@ namespace ler::rhi::vulkan
         bool binaryPipeline = false;
         bool descriptorBuffer = false;
         bool mutableDescriptor = false;
+        bool multiDrawIndirect = false;
         bool drawIndirectCount = false;
     };
 
