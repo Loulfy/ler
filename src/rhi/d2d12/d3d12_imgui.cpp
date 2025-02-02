@@ -1,5 +1,5 @@
 //
-// Created by loulfy on 22/09/2024.
+// Created by Loulfy on 22/09/2024.
 //
 
 #include "rhi/d3d12.hpp"
@@ -16,7 +16,7 @@ ImGuiPass::~ImGuiPass()
 
 void ImGuiPass::create(const DevicePtr& device, const SwapChainPtr& swapChain)
 {
-    auto* dev = checked_cast<Device*>(device.get());
+    const auto* dev = checked_cast<Device*>(device.get());
     const D3D12Context& context = dev->getContext();
     D3D12_DESCRIPTOR_HEAP_DESC desc = {};
     desc.Type = D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV;

@@ -504,7 +504,7 @@ namespace ler::rhi::d3d12
         {
             D3D12_CONSTANT_BUFFER_VIEW_DESC cbvDesc = {};
             cbvDesc.BufferLocation = native->handle->GetGPUVirtualAddress();
-            cbvDesc.SizeInBytes = native->sizeBytes();
+            cbvDesc.SizeInBytes = native->sizeInBytes();
 
             m_context.device->CreateConstantBufferView(&cbvDesc, descriptorSet.tables[0].getCpuHandle(binding));
         }
@@ -520,12 +520,12 @@ namespace ler::rhi::d3d12
                 if(stride < UINT32_MAX)
                 {
                     uavDesc.Buffer.StructureByteStride = stride;
-                    uavDesc.Buffer.NumElements = native->sizeBytes()/stride;
+                    uavDesc.Buffer.NumElements = native->sizeInBytes()/stride;
                 }
                 else
                 {
                     uavDesc.Format = DXGI_FORMAT_R32_UINT;
-                    uavDesc.Buffer.NumElements = native->sizeBytes()/sizeof(uint32_t);
+                    uavDesc.Buffer.NumElements = native->sizeInBytes()/sizeof(uint32_t);
                 }
 
                 D3D12_CPU_DESCRIPTOR_HANDLE cpuHandle = native->clearCpuHandle.getCpuHandle();
@@ -544,7 +544,7 @@ namespace ler::rhi::d3d12
                 srvDesc.Buffer.Flags = D3D12_BUFFER_SRV_FLAG_NONE;
                 srvDesc.Shader4ComponentMapping = D3D12_DEFAULT_SHADER_4_COMPONENT_MAPPING;
                 srvDesc.Buffer.StructureByteStride = stride;
-                srvDesc.Buffer.NumElements = native->sizeBytes()/stride;
+                srvDesc.Buffer.NumElements = native->sizeInBytes()/stride;
 
                 m_context.device->CreateShaderResourceView(native->handle, &srvDesc, descriptorSet.tables[0].getCpuHandle(binding));
             }

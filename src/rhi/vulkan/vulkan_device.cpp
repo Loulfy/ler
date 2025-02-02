@@ -17,7 +17,7 @@ DevicePtr CreateDevice(const DeviceConfig& config)
     return std::make_shared<Device>(config);
 }
 
-static constexpr bool gpuFilter(const vk::PhysicalDevice& phyDev)
+static bool gpuFilter(const vk::PhysicalDevice& phyDev)
 {
 #ifdef PLATFORM_MACOS
     return phyDev.getProperties().deviceType == vk::PhysicalDeviceType::eIntegratedGpu;
@@ -175,7 +175,7 @@ void unlinkUnsupportedFeatures(InfoChain& createInfoChain, const VulkanFeatures&
 
 Device::Device(const DeviceConfig& config)
 {
-    static const vk::detail::DynamicLoader dl;
+    static const vk::DynamicLoader dl;
     const auto vkGetInstanceProcAddr = dl.getProcAddress<PFN_vkGetInstanceProcAddr>("vkGetInstanceProcAddr");
     VULKAN_HPP_DEFAULT_DISPATCHER.init(vkGetInstanceProcAddr);
 

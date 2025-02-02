@@ -1,5 +1,5 @@
 //
-// Created by loulfy on 29/12/2023.
+// Created by Loulfy on 29/12/2023.
 //
 
 #include "rhi/d3d12.hpp"
@@ -110,23 +110,12 @@ void DescriptorHeapAllocator::free(DescriptorHeapAllocation&& alloc)
     alloc.reset();
 }
 
-/*std::vector<ID3D12DescriptorHeap*> DescriptorSet::heap() const
-{
-    std::vector<ID3D12DescriptorHeap*> heaps;
-    for (auto& alloc: tables)
-    {
-        if (!alloc.isNull())
-            heaps.emplace_back(alloc.heap());
-    }
-    return heaps;
-}*/
-
 BindlessTable::BindlessTable(const D3D12Context& context, uint32_t count) : m_context(context)
 {
     D3D12_DESCRIPTOR_HEAP_DESC desc = {};
     desc.Type = D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV;
     desc.NumDescriptors = count;
-    //m_context.device->CreateDescriptorHeap(&desc, IID_PPV_ARGS(&m_heapResCpu));
+    // m_context.device->CreateDescriptorHeap(&desc, IID_PPV_ARGS(&m_heapResCpu));
     desc.Flags = D3D12_DESCRIPTOR_HEAP_FLAG_SHADER_VISIBLE;
     m_context.device->CreateDescriptorHeap(&desc, IID_PPV_ARGS(&m_heapRes));
     m_descriptorSize = m_context.device->GetDescriptorHandleIncrementSize(desc.Type);
@@ -137,7 +126,7 @@ BindlessTable::BindlessTable(const D3D12Context& context, uint32_t count) : m_co
 
 void BindlessTable::setSampler(const SamplerPtr& sampler, uint32_t slot)
 {
-    auto* samp = checked_cast<Sampler*>(sampler.get());
+    const auto* samp = checked_cast<Sampler*>(sampler.get());
 
     D3D12_CPU_DESCRIPTOR_HANDLE CPUHandle = m_heapSamp->GetCPUDescriptorHandleForHeapStart();
     CPUHandle.ptr += slot * m_context.device->GetDescriptorHandleIncrementSize(D3D12_DESCRIPTOR_HEAP_TYPE_SAMPLER);
@@ -147,7 +136,7 @@ void BindlessTable::setSampler(const SamplerPtr& sampler, uint32_t slot)
 
 bool BindlessTable::visitTexture(const TexturePtr& texture, uint32_t slot)
 {
-    auto* image = checked_cast<Texture*>(texture.get());
+    const auto* image = checked_cast<Texture*>(texture.get());
 
     D3D12_CPU_DESCRIPTOR_HANDLE CPUHandle = m_heapRes->GetCPUDescriptorHandleForHeapStart();
     CPUHandle.ptr += slot * m_descriptorSize;
@@ -165,42 +154,42 @@ bool BindlessTable::visitTexture(const TexturePtr& texture, uint32_t slot)
 
 bool BindlessTable::visitBuffer(const BufferPtr& buffer, uint32_t slot)
 {
-    auto* buff = checked_cast<Buffer*>(buffer.get());
+    const auto* buff = checked_cast<Buffer*>(buffer.get());
 
     D3D12_CPU_DESCRIPTOR_HANDLE CPUHandle = m_heapRes->GetCPUDescriptorHandleForHeapStart();
     CPUHandle.ptr += slot * m_descriptorSize;
 
     uint32_t stride = buff->stride;
-    if(buff->isCBV)
+    if (buff->isCBV)
     {
         D3D12_CONSTANT_BUFFER_VIEW_DESC cbvDesc = {};
         cbvDesc.BufferLocation = buff->handle->GetGPUVirtualAddress();
-        cbvDesc.SizeInBytes = buff->sizeBytes();
+        cbvDesc.SizeInBytes = buff->sizeInBytes();
 
         m_context.device->CreateConstantBufferView(&cbvDesc, CPUHandle);
     }
-    else if(buff->desc.Flags & D3D12_RESOURCE_FLAG_ALLOW_UNORDERED_ACCESS)
+    else if (buff->desc.Flags & D3D12_RESOURCE_FLAG_ALLOW_UNORDERED_ACCESS)
     {
         D3D12_UNORDERED_ACCESS_VIEW_DESC uavDesc = {};
         uavDesc.ViewDimension = D3D12_UAV_DIMENSION_BUFFER;
         uavDesc.Buffer.Flags = D3D12_BUFFER_UAV_FLAG_NONE;
 
-        if(stride > 0)
+        if (stride > 0)
         {
             uavDesc.Buffer.StructureByteStride = stride;
-            uavDesc.Buffer.NumElements = buff->sizeBytes()/stride;
+            uavDesc.Buffer.NumElements = buff->sizeInBytes() / stride;
         }
         else
         {
             uavDesc.Format = buff->format;
-            uavDesc.Buffer.NumElements = buff->sizeBytes()/4u;
+            uavDesc.Buffer.NumElements = buff->sizeInBytes() / 4u;
         }
 
-        //D3D12_CPU_DESCRIPTOR_HANDLE CPUOnlyHandle = m_heapResCpu->GetCPUDescriptorHandleForHeapStart();
-        //CPUOnlyHandle.ptr += slot * m_descriptorSize;
+        // D3D12_CPU_DESCRIPTOR_HANDLE CPUOnlyHandle = m_heapResCpu->GetCPUDescriptorHandleForHeapStart();
+        // CPUOnlyHandle.ptr += slot * m_descriptorSize;
 
         m_context.device->CreateUnorderedAccessView(buff->handle, nullptr, &uavDesc, CPUHandle);
-        //m_context.device->CopyDescriptorsSimple(1, CPUHandle, CPUOnlyHandle, D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV);
+        // m_context.device->CopyDescriptorsSimple(1, CPUHandle, CPUOnlyHandle, D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV);
     }
     else
     {
@@ -209,7 +198,7 @@ bool BindlessTable::visitBuffer(const BufferPtr& buffer, uint32_t slot)
         srvDesc.Buffer.Flags = D3D12_BUFFER_SRV_FLAG_NONE;
         srvDesc.Shader4ComponentMapping = D3D12_DEFAULT_SHADER_4_COMPONENT_MAPPING;
         srvDesc.Buffer.StructureByteStride = stride;
-        srvDesc.Buffer.NumElements = buff->sizeBytes()/stride;
+        srvDesc.Buffer.NumElements = buff->sizeInBytes() / stride;
 
         m_context.device->CreateShaderResourceView(buff->handle, &srvDesc, CPUHandle);
     }

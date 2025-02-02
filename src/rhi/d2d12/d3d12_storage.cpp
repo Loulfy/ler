@@ -18,7 +18,7 @@ Storage::Storage(Device* device, std::shared_ptr<coro::thread_pool>& tp)
 
     for (const BufferPtr& staging : m_stagings)
     {
-        auto* buff = checked_cast<Buffer*>(staging.get());
+        const auto* buff = checked_cast<Buffer*>(staging.get());
         void* pMappedData;
         buff->handle->Map(0, nullptr, &pMappedData);
         auto* data = static_cast<std::byte*>(pMappedData);
@@ -84,8 +84,8 @@ coro::task<> Storage::makeSingleTextureTask(coro::latch& latch, BindlessTablePtr
     queueTexture(file, request);
     int bufferIndex = acquireStaging();
     request.Destination.Memory.Buffer = m_buffers[bufferIndex];
-    request.Destination.Memory.Size = file->sizeBytes();
-    request.Source.File.Size = file->sizeBytes();
+    request.Destination.Memory.Size = file->sizeInBytes();
+    request.Source.File.Size = file->sizeInBytes();
     m_queue->EnqueueRequest(&request);
 
     submitWait();
@@ -144,7 +144,7 @@ coro::task<> Storage::makeMultiTextureTask(coro::latch& latch, BindlessTablePtr 
     for (int i = 0; i < files.size(); ++i)
     {
         queueTexture(files[i], requests[i]);
-        const uint32_t byteSizes = files[i]->sizeBytes(); //, 16u);
+        const uint32_t byteSizes = files[i]->sizeInBytes(); //, 16u);
 
         if (offset + byteSizes > capacity)
         {
@@ -155,8 +155,8 @@ coro::task<> Storage::makeMultiTextureTask(coro::latch& latch, BindlessTablePtr 
 
         dependencies[i] = { bufferId, offset };
         requests[i].Destination.Memory.Buffer = m_buffers[bufferId] + offset;
-        requests[i].Destination.Memory.Size = files[i]->sizeBytes();
-        requests[i].Source.File.Size = files[i]->sizeBytes();
+        requests[i].Destination.Memory.Size = files[i]->sizeInBytes();
+        requests[i].Source.File.Size = files[i]->sizeInBytes();
         m_queue->EnqueueRequest(&requests[i]);
 
         offset += byteSizes;

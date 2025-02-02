@@ -1,12 +1,13 @@
 //
-// Created by loulfy on 04/10/2024.
+// Created by Loulfy on 04/10/2024.
 //
 
 #include "rhi/d3d12.hpp"
 
 namespace ler::rhi::d3d12
 {
-PipelinePtr Device::loadPipeline(const std::string& name, const std::span<ShaderModule>& shaderModules, const PipelineDesc& desc)
+PipelinePtr Device::loadPipeline(const std::string& name, const std::span<ShaderModule>& shaderModules,
+                                 const PipelineDesc& desc)
 {
     return m_library->loadPipeline(name, shaderModules, desc);
 }
@@ -145,7 +146,6 @@ void PSOLibrary::destroy()
     }
 }
 
-
 void PSOLibrary::build(PsoCache& psoCache)
 {
     std::vector<ShaderPtr> shaders;
@@ -205,7 +205,8 @@ void PSOLibrary::build(PsoCache& psoCache)
     psoCache.pipeline = std::move(pipeline);
 }
 
-PipelinePtr PSOLibrary::loadPipeline(const std::string& name, const std::span<ShaderModule>& shaderModules, const PipelineDesc& desc)
+PipelinePtr PSOLibrary::loadPipeline(const std::string& name, const std::span<ShaderModule>& shaderModules,
+                                     const PipelineDesc& desc)
 {
     if (!m_pipelines.contains(name))
     {

@@ -1,5 +1,5 @@
 //
-// Created by loulfy on 05/12/2023.
+// Created by Loulfy on 05/12/2023.
 //
 
 #include "rhi/d3d12.hpp"
@@ -8,26 +8,26 @@ namespace ler::rhi::d3d12
 {
 CommandPtr Device::createCommand(QueueType type)
 {
-    CommandPtr cmd = m_queues[int(type)]->getOrCreateCommandBuffer();
+    CommandPtr cmd = m_queues[static_cast<int>(type)]->getOrCreateCommandBuffer();
     return cmd;
 }
 
 void Device::submitCommand(CommandPtr& command)
 {
     Queue::CommandPtr cmd = std::static_pointer_cast<Command>(command);
-    Queue* queue = m_queues[int(cmd->queueType)].get();
-    auto test = std::span{ &cmd, 1 };
-    queue->submit(test);
+    Queue* queue = m_queues[static_cast<int>(cmd->queueType)].get();
+    const std::span bundle{ &cmd, 1 };
+    queue->submit(bundle);
 }
 
 void Device::submitOneShot(const CommandPtr& command)
 {
-    m_queues[int(command->queueType)]->submitAndWait(command);
+    m_queues[static_cast<int>(command->queueType)]->submitAndWait(command);
 }
 
 void Device::runGarbageCollection()
 {
-    for (auto& queue : m_queues)
+    for (std::unique_ptr<Queue>& queue : m_queues)
     {
         if (queue)
         {
@@ -79,7 +79,7 @@ uint64_t Queue::submit(const std::span<CommandPtr>& ppCmd)
 
     for (size_t i = 0; i < ppCmd.size(); i++)
     {
-        CommandPtr commandBuffer = ppCmd[i];
+        const Queue::CommandPtr& commandBuffer = ppCmd[i];
 
         // It's time!
         commandBuffer->m_commandList->Close();
@@ -97,8 +97,8 @@ uint64_t Queue::submit(const std::span<CommandPtr>& ppCmd)
 
 void Queue::submitAndWait(const rhi::CommandPtr& command)
 {
-    auto* native = checked_cast<Command*>(command.get());
-    native->m_commandList->Close();
+    auto* nativeCmd = checked_cast<Command*>(command.get());
+    nativeCmd->m_commandList->Close();
 
     ComPtr<ID3D12Fence> fence;
     m_context.device->CreateFence(0, D3D12_FENCE_FLAG_NONE, IID_PPV_ARGS(&fence));
@@ -107,14 +107,14 @@ void Queue::submitAndWait(const rhi::CommandPtr& command)
     {
         std::lock_guard lock(m_mutexSend);
         // Execute the command list.
-        ID3D12CommandList* ppCommandLists[] = { native->m_commandList.Get() };
+        ID3D12CommandList* ppCommandLists[] = { nativeCmd->m_commandList.Get() };
         ID3D12CommandQueue* commandQueue = m_commandQueue.Get();
         commandQueue->ExecuteCommandLists(1, ppCommandLists);
         commandQueue->Signal(fence.Get(), 1);
     }
 
     fence->SetEventOnCompletion(1, event);
-    WaitForSingleObjectEx(event, INFINITE, FALSE);
+    std::ignore = WaitForSingleObjectEx(event, INFINITE, FALSE);
     CloseHandle(event);
 }
 
@@ -245,8 +245,8 @@ void Command::copyBufferToTexture(const BufferPtr& buffer, const TexturePtr& tex
 
 void Command::copyBuffer(const BufferPtr& src, const BufferPtr& dst, uint64_t byteSize, uint64_t dstOffset)
 {
-    auto* buffSrc = checked_cast<Buffer*>(src.get());
-    auto* buffDst = checked_cast<Buffer*>(dst.get());
+    const auto* buffSrc = checked_cast<Buffer*>(src.get());
+    const auto* buffDst = checked_cast<Buffer*>(dst.get());
     m_commandList->CopyBufferRegion(buffDst->handle, dstOffset, buffSrc->handle, 0, byteSize);
 }
 
@@ -255,17 +255,17 @@ void Command::fillBuffer(const BufferPtr& dst, uint32_t value) const
     ID3D12DescriptorHeap* heap = m_gpuHeap->heap();
     m_commandList->SetDescriptorHeaps(1, &heap);
 
-    auto* buff = checked_cast<Buffer*>(dst.get());
+    const auto* buff = checked_cast<Buffer*>(dst.get());
     D3D12_GPU_DESCRIPTOR_HANDLE gpuHandle = buff->clearGpuHandle.getGpuHandle();
     D3D12_CPU_DESCRIPTOR_HANDLE cpuHandle = buff->clearCpuHandle.getCpuHandle();
-    static std::array<uint32_t, 4> clears;
+    std::array<uint32_t, 4> clears = {};
     clears.fill(value);
     m_commandList->ClearUnorderedAccessViewUint(gpuHandle, cpuHandle, buff->handle, clears.data(), 0, nullptr);
 }
 
 void Command::bindIndexBuffer(const BufferPtr& indexBuffer)
 {
-    auto* buff = checked_cast<Buffer*>(indexBuffer.get());
+    const auto* buff = checked_cast<Buffer*>(indexBuffer.get());
     D3D12_INDEX_BUFFER_VIEW view = {};
     view.SizeInBytes = buff->desc.Width;
     view.Format = DXGI_FORMAT_R32_UINT;
@@ -275,7 +275,7 @@ void Command::bindIndexBuffer(const BufferPtr& indexBuffer)
 
 void Command::bindVertexBuffers(uint32_t slot, const BufferPtr& indexBuffer)
 {
-    auto* buff = checked_cast<Buffer*>(indexBuffer.get());
+    const auto* buff = checked_cast<Buffer*>(indexBuffer.get());
     D3D12_VERTEX_BUFFER_VIEW view = {};
     view.SizeInBytes = buff->desc.Width;
     view.StrideInBytes = 12;
@@ -289,20 +289,21 @@ void Command::drawPrimitives(uint32_t vertexCount) const
 }
 
 void Command::drawIndexedPrimitives(uint32_t indexCount, uint32_t firstIndex, int32_t firstVertex,
-                                   uint32_t firstId) const
+                                    uint32_t instanceId) const
 {
-    m_commandList->DrawIndexedInstanced(indexCount, 1, firstIndex, firstVertex, firstId);
+    m_commandList->DrawIndexedInstanced(indexCount, 1, firstIndex, firstVertex, instanceId);
 }
 
-void Command::drawIndirectIndexedPrimitives(const rhi::PipelinePtr& pipeline, const BufferPtr& commands, const BufferPtr& count,
-                                  uint32_t maxDrawCount, uint32_t stride)
+void Command::drawIndirectIndexedPrimitives(const rhi::PipelinePtr& pipeline, const BufferPtr& commands,
+                                            const BufferPtr& count, uint32_t maxDrawCount, uint32_t stride)
 {
-    auto* drawsBuff = checked_cast<Buffer*>(commands.get());
-    auto* countBuff = checked_cast<Buffer*>(count.get());
+    const auto* drawsBuff = checked_cast<Buffer*>(commands.get());
+    const auto* countBuff = checked_cast<Buffer*>(count.get());
     constexpr static UINT64 offset = 0;
 
     ComPtr<ID3D12CommandSignature> signature = checked_cast<Pipeline*>(pipeline.get())->commandSignature.Get();
-    m_commandList->ExecuteIndirect(signature.Get(), maxDrawCount, drawsBuff->handle, offset, countBuff->handle, sizeof(uint32_t));
+    m_commandList->ExecuteIndirect(signature.Get(), maxDrawCount, drawsBuff->handle, offset, countBuff->handle,
+                                   sizeof(uint32_t));
 }
 
 void Command::dispatch(uint32_t x, uint32_t y, uint32_t z)
@@ -344,11 +345,10 @@ void Command::bindPipeline(const PipelinePtr& pipeline, uint32_t descriptorHandl
 
 void Command::bindPipeline(const PipelinePtr& pipeline, const BindlessTablePtr& table)
 {
-    auto* native = checked_cast<Pipeline*>(pipeline.get());
+    const auto* native = checked_cast<Pipeline*>(pipeline.get());
     m_commandList->SetPipelineState(native->pipelineState.Get());
 
-    auto* bindless = checked_cast<BindlessTable*>(table.get());
-    // DescriptorSet& descriptorSet = native->getDescriptorSet(0);
+    const auto* bindless = checked_cast<BindlessTable*>(table.get());
 
     const std::array<ID3D12DescriptorHeap*, 2> heaps = bindless->heaps();
     m_commandList->SetDescriptorHeaps(heaps.size(), heaps.data());
@@ -366,7 +366,7 @@ void Command::bindPipeline(const PipelinePtr& pipeline, const BindlessTablePtr& 
 
 void Command::pushConstant(const PipelinePtr& pipeline, ShaderType stage, uint32_t slot, const void* data, uint8_t size)
 {
-    auto* native = checked_cast<Pipeline*>(pipeline.get());
+    const auto* native = checked_cast<Pipeline*>(pipeline.get());
     if (native->isGraphics())
         m_commandList->SetGraphicsRoot32BitConstants(0u, size / sizeof(uint32_t), data, 0u);
     else
