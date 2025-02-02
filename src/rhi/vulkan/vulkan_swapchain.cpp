@@ -137,6 +137,7 @@ void SwapChain::resize(uint32_t width, uint32_t height, bool vsync)
     createInfo.setMinImageCount(backBufferCount);
     createInfo.setImageFormat(surfaceFormat.format);
     createInfo.setPresentMode(presentMode);
+    createInfo.setOldSwapchain(m_handle.get());
     m_handle = m_context.device.createSwapchainKHRUnique(createInfo);
 
     const std::vector<vk::Image> swapChainImages = m_context.device.getSwapchainImagesKHR(m_handle.get());
