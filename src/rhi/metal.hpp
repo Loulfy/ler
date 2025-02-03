@@ -1,5 +1,5 @@
 //
-// Created by loulfy on 21/11/2024.
+// Created by Loulfy on 21/11/2024.
 //
 
 #pragma once
@@ -43,7 +43,7 @@ struct Buffer final : public IBuffer
     // clang-format off
     ~Buffer() override = default;
     explicit Buffer(const MetalContext& context) : m_context(context) {}
-    [[nodiscard]] uint64_t sizeBytes() const override { return handle->length(); }
+    [[nodiscard]] uint64_t sizeInBytes() const override { return handle->length(); }
     [[nodiscard]] bool staging() const override { return handle->storageMode() == MTL::StorageModeShared; }
     void uploadFromMemory(const void* src, uint64_t byteSize) const override;
     void getUint(uint32_t* ptr) const override;
@@ -252,7 +252,7 @@ struct SwapChain final : public ISwapChain
 struct ReadOnlyFile final : public IReadOnlyFile
 {
     std::string getFilename() override;
-    uint64_t sizeBytes() override;
+    uint64_t sizeInBytes() override;
 
     fs::path path;
     MTL::IOFileHandle* handle = nullptr;

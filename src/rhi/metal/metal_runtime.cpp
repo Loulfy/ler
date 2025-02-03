@@ -44,7 +44,7 @@ bool BindlessTable::visitBuffer(const BufferPtr& buffer, uint32_t slot)
     {
         IRBufferView view = {};
         view.buffer = buff->handle;
-        view.bufferSize = buff->sizeBytes();
+        view.bufferSize = buff->sizeInBytes();
         view.textureBufferView = buff->view;
         view.typedBuffer = true;
         IRDescriptorTableSetBufferView(descriptorTable + slot, &view);
@@ -207,7 +207,7 @@ void Command::drawIndexedPrimitives(uint32_t indexCount, uint32_t firstIndex, in
 {
     assert(m_renderCommandEncoder);
     IRRuntimeDrawIndexedPrimitives(m_renderCommandEncoder, MTL::PrimitiveTypeTriangle, indexCount, MTL::IndexTypeUInt32,
-                                   m_indexBuffer, firstIndex * sizeof(uint32_t), 1, firstVertex, firstId);
+                                   m_indexBuffer, firstIndex * sizeof(uint32_t), 1, firstVertex, instanceId);
 }
 
 void Command::encodeIndirectIndexedPrimitives(const EncodeIndirectIndexedDrawDesc& desc)
