@@ -13,7 +13,7 @@ std::string ReadOnlyFile::getFilename()
     return path.filename();
 }
 
-uint64_t ReadOnlyFile::sizeBytes()
+uint64_t ReadOnlyFile::sizeInBytes()
 {
     struct stat st = {};
     stat(path.c_str(), &st);
@@ -59,7 +59,7 @@ coro::task<> Storage::makeSingleTextureTask(coro::latch& latch, BindlessTablePtr
     int bufferIndex = acquireStaging();
 
     MTL::IOFileHandle* srcFile = checked_cast<ReadOnlyFile*>(file.get())->handle;
-    request->loadBytes(m_buffers[bufferIndex], file->sizeBytes(), srcFile, 0);
+    request->loadBytes(m_buffers[bufferIndex], file->sizeInBytes(), srcFile, 0);
 
     request->commit();
     request->waitUntilCompleted();
@@ -120,7 +120,7 @@ coro::task<> Storage::makeMultiTextureTask(coro::latch& latch, BindlessTablePtr 
     for (int i = 0; i < files.size(); ++i)
     {
         MTL::IOFileHandle* srcFile = checked_cast<ReadOnlyFile*>(files[i].get())->handle;
-        const uint64_t byteSizes = align(files[i]->sizeBytes(), 16ull);
+        const uint64_t byteSizes = align(files[i]->sizeInBytes(), 16ull);
 
         if (offset + byteSizes > capacity)
         {
@@ -130,7 +130,7 @@ coro::task<> Storage::makeMultiTextureTask(coro::latch& latch, BindlessTablePtr 
         }
 
         dependencies[i] = { bufferId, offset };
-        request->loadBytes(m_buffers[bufferId] + offset, files[i]->sizeBytes(), srcFile, 0);
+        request->loadBytes(m_buffers[bufferId] + offset, files[i]->sizeInBytes(), srcFile, 0);
 
         offset += byteSizes;
     }

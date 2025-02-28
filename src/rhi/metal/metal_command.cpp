@@ -110,7 +110,7 @@ void Command::copyBufferToTexture(const BufferPtr& buffer, const TexturePtr& tex
     auto* staging = checked_cast<Buffer*>(buffer.get());
 
     if (pSrcData != nullptr)
-        buffer->uploadFromMemory(pSrcData, staging->sizeBytes());
+        buffer->uploadFromMemory(pSrcData, staging->sizeInBytes());
 
     const MTL::Origin origin(0, 0, 0);
     const MTL::Size size(sub.width, sub.height, sub.depth);
@@ -149,7 +149,7 @@ void Command::fillBuffer(const BufferPtr& dst, uint32_t value) const
     const auto* buffDst = checked_cast<Buffer*>(dst.get());
 
     MTL::BlitCommandEncoder* cd = cmdBuf->blitCommandEncoder();
-    cd->fillBuffer(buffDst->handle, NS::Range::Make(0, buffDst->sizeBytes()), value);
+    cd->fillBuffer(buffDst->handle, NS::Range::Make(0, buffDst->sizeInBytes()), value);
     cd->endEncoding();
 }
 

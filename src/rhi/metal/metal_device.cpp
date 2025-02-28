@@ -80,7 +80,7 @@ BufferPtr Device::createBuffer(const BufferDesc& desc)
         options = MTL::ResourceStorageModePrivate;
 
     MTL::Resource* resource = nullptr;
-    buffer->handle = m_device->newBuffer(desc.byteSize, options);
+    buffer->handle = m_device->newBuffer(desc.sizeInBytes, options);
     resource = buffer->handle;
 
     resource->setLabel(NS::String::string(desc.debugName.c_str(), NS::StringEncoding::UTF8StringEncoding));
@@ -88,10 +88,10 @@ BufferPtr Device::createBuffer(const BufferDesc& desc)
     if (const MTL::PixelFormat format = convertFormat(desc.format); format != MTL::PixelFormatInvalid)
     {
         const FormatBlockInfo formatInfo = formatToBlockInfo(desc.format);
-        const uint64_t element_num = desc.byteSize / formatInfo.blockSizeByte;
+        const uint64_t element_num = desc.sizeInBytes / formatInfo.blockSizeByte;
         const MTL::TextureDescriptor* descriptor = MTL::TextureDescriptor::textureBufferDescriptor(
             format, element_num, buffer->handle->resourceOptions(), MTL::TextureUsageShaderRead);
-        buffer->view = buffer->handle->newTexture(descriptor, 0, desc.byteSize);
+        buffer->view = buffer->handle->newTexture(descriptor, 0, desc.sizeInBytes);
     }
 
     if (desc.isICB)
@@ -137,7 +137,7 @@ BufferPtr Device::createHostBuffer(uint64_t byteSize)
 
 void Buffer::uploadFromMemory(const void* src, uint64_t byteSize) const
 {
-    if (staging() && sizeBytes() >= byteSize)
+    if (staging() && sizeInBytes() >= byteSize)
         std::memcpy(handle->contents(), src, byteSize);
     else
         log::error("Failed to upload to buffer");
