@@ -150,8 +150,8 @@ static void compileShaderHlsl(const ShaderModule& shaderModule, const fs::path& 
         L"-fspv-extension=SPV_KHR_multiview",
         L"-fspv-extension=SPV_KHR_shader_draw_parameters",
         L"-fspv-extension=SPV_EXT_descriptor_indexing",
-        L"-fspv-extension=SPV_KHR_ray_query"
-        //L"-fvk-bind-resource-heap"
+        L"-fspv-extension=SPV_KHR_ray_query",
+        L"-fspv-target-env=vulkan1.3"
     };
 
     compilationArguments.push_back(DXC_ARG_DEBUG);

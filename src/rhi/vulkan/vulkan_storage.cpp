@@ -55,9 +55,8 @@ coro::task<> Storage::makeSingleTextureTask(coro::latch& latch, BindlessTablePtr
     const uint64_t head = tex->headOffset();
     desc.debugName = file->getFilename();
     TexturePtr texture = m_device->createTexture(desc);
-    const uint32_t texIndex = table->allocate();
-    log::info("Load texture {:03}: {}", texIndex, desc.debugName);
-    table->setResource(texture, texIndex);
+    ResourceViewPtr view = table->createResourceView(texture);
+    log::info("Load texture {:03}: {}", view->getBindlessIndex(), desc.debugName);
 
     request.fileLength = tex->getDataSize();
     request.fileOffset = head;
@@ -122,32 +121,36 @@ coro::task<> Storage::makeMultiTextureTask(coro::latch& latch, BindlessTablePtr 
 
     CommandPtr cmd = m_device->createCommand(QueueType::Transfer);
 
-    for (size_t i = 0; i < files.size(); ++i)
     {
-        const ReadOnlyFilePtr& file = files[i];
-        const sys::IoService::FileLoadRequest& req = requests[i];
-        std::byte* data = m_ios.getMemPtr(req.buffIndex);
-        const img::ITexture* tex = factoryTexture(file, data + req.buffOffset);
-        std::span levels = tex->levels();
-        TextureDesc desc = tex->desc();
-        desc.debugName = file->getFilename();
-
-        uint32_t texIndex = table->allocate();
-        log::info("Load texture {:03}: {}", texIndex, desc.debugName);
-        TexturePtr texture = m_device->createTexture(desc);
-        table->setResource(texture, texIndex);
-
-        for (const uint32_t mip : std::views::iota(0u, levels.size()))
+        std::lock_guard lock = table->lock();
+        for (size_t i = 0; i < files.size(); ++i)
         {
-            const img::ITexture::LevelIndexEntry& level = levels[mip];
-            // log::info("byteOffset = {}, byteLength = {}", level.byteOffset, level.byteLength);
+            const ReadOnlyFilePtr& file = files[i];
+            const sys::IoService::FileLoadRequest& req = requests[i];
+            std::byte* data = m_ios.getMemPtr(req.buffIndex);
+            const img::ITexture* tex = factoryTexture(file, data + req.buffOffset);
+            std::span levels = tex->levels();
+            TextureDesc desc = tex->desc();
+            desc.debugName = file->getFilename();
 
-            Subresource sub;
-            sub.index = mip;
-            sub.offset = level.byteOffset + req.buffOffset;
-            sub.width = desc.width >> mip;
-            sub.height = desc.height >> mip;
-            cmd->copyBufferToTexture(getStaging(req.buffIndex), texture, sub, nullptr);
+            // uint32_t texIndex = table->allocate();
+            TexturePtr texture = m_device->createTexture(desc);
+            ResourceViewPtr view = table->createResourceView(texture);
+            log::info("Load texture {:03}: {}", view->getBindlessIndex(), desc.debugName);
+            // table->setResource(texture, texIndex);
+
+            for (const uint32_t mip : std::views::iota(0u, levels.size()))
+            {
+                const img::ITexture::LevelIndexEntry& level = levels[mip];
+                // log::info("byteOffset = {}, byteLength = {}", level.byteOffset, level.byteLength);
+
+                Subresource sub;
+                sub.index = mip;
+                sub.offset = level.byteOffset + req.buffOffset;
+                sub.width = desc.width >> mip;
+                sub.height = desc.height >> mip;
+                cmd->copyBufferToTexture(getStaging(req.buffIndex), texture, sub, nullptr);
+            }
         }
     }
 

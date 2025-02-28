@@ -7,7 +7,7 @@
 namespace ler::rhi
 {
 CommonStorage::CommonStorage(IDevice* device, std::shared_ptr<coro::thread_pool>& tp)
-    : m_device(device), m_scheduler(tp), m_semaphore(kStagingCount), m_memory(m_buffer.get(), sys::C04Mio)
+    : m_device(device), m_scheduler(*tp), m_semaphore(kStagingCount), m_memory(m_buffer.get(), sys::C04Mio)
 {
     for (int i = 0; i < kStagingCount; ++i)
     {
@@ -19,7 +19,6 @@ CommonStorage::CommonStorage(IDevice* device, std::shared_ptr<coro::thread_pool>
 
 void CommonStorage::update()
 {
-    m_scheduler.garbage_collect();
     //if (m_scheduler.empty())
       //  m_memory.release();
 }
@@ -64,18 +63,50 @@ void CommonStorage::requestLoadTexture(coro::latch& latch, BindlessTablePtr& tab
                                        const std::span<ReadOnlyFilePtr>& files)
 {
     if (files.size() == 1)
-        m_scheduler.start(makeSingleTextureTask(latch, table, files.front()));
+        m_scheduler.spawn(makeSingleTextureTask(latch, table, files.front()));
     else
     {
         std::vector fileList(files.begin(), files.end());
-        m_scheduler.start(makeMultiTextureTask(latch, table, std::move(fileList)));
+        m_scheduler.spawn(makeMultiTextureTask(latch, table, std::move(fileList)));
     }
 }
 
 void CommonStorage::requestLoadBuffer(coro::latch& latch, const ReadOnlyFilePtr& file, BufferPtr& buffer,
                                       uint64_t fileLength, uint64_t fileOffset)
 {
-    m_scheduler.start(makeBufferTask(latch, file, buffer, fileLength, fileOffset));
+    m_scheduler.spawn(makeBufferTask(latch, file, buffer, fileLength, fileOffset));
+}
+
+void CommonStorage::requestOpenTexture(coro::latch& latch, BindlessTablePtr& table, const std::span<fs::path>& paths)
+{
+    std::vector fileList(paths.begin(), paths.end());
+    m_scheduler.spawn(makeOpenTextureTask(latch, table, std::move(fileList)));
+}
+
+coro::task<> CommonStorage::makeOpenTextureTask(coro::latch& latch, BindlessTablePtr& table, std::vector<fs::path> paths)
+{
+    int i = 0;
+    uint64_t byteSizes;
+    uint64_t totalByteSizes = 0;
+    std::vector<ReadOnlyFilePtr> files;
+    for(const fs::path& p : paths)
+    {
+        ReadOnlyFilePtr file = openFile(p);
+        byteSizes = file->sizeInBytes();
+        if(totalByteSizes + byteSizes > kStagingSize)
+        {
+            m_scheduler.spawn(makeMultiTextureTask(latch, table, std::move(files)));
+            totalByteSizes = 0;
+            ++i;
+        }
+
+        totalByteSizes += byteSizes;
+        files.emplace_back(file);
+    }
+
+    log::info("Requested {} bundles", i);
+
+    co_return;
 }
 
 void CommonStorage::releaseStaging(uint32_t index)

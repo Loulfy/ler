@@ -110,7 +110,8 @@ void DescriptorHeapAllocator::free(DescriptorHeapAllocation&& alloc)
     alloc.reset();
 }
 
-BindlessTable::BindlessTable(const D3D12Context& context, uint32_t count) : m_context(context)
+BindlessTable::BindlessTable(const D3D12Context& context, uint32_t count)
+    : CommonBindlessTable(count), m_context(context)
 {
     D3D12_DESCRIPTOR_HEAP_DESC desc = {};
     desc.Type = D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV;

@@ -135,11 +135,11 @@ class DeferredScene final : public rhi::IRenderPass, public render::IMeshRendere
 
         meshes = params.meshList->getMeshBuffers();
 
-        m_cullRes.countIndex = m_table->appendResource(m_countBuffer);
+        /*m_cullRes.countIndex = m_table->appendResource(m_countBuffer);
         m_cullRes.drawIndex = m_table->appendResource(m_drawBuffer);
         m_cullRes.propIndex = m_table->appendResource(params.meshList->getInstanceBuffer());
         m_cullRes.meshIndex = m_table->appendResource(meshes->getMeshBuffer());
-        m_cullRes.frustIndex = m_table->appendResource(m_frustumBuffer);
+        m_cullRes.frustIndex = m_table->appendResource(m_frustumBuffer);*/
 
         pass.viewport = swapChain->extent();
         pass.colors[0].loadOp = rhi::AttachmentLoadOp::Clear;

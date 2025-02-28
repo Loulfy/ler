@@ -55,7 +55,7 @@ void MeshBuffers::allocate(const rhi::DevicePtr& device, const flatbuffers::Vect
     coro::sync_wait(*m_latch);
 }
 
-void MeshBuffers::allocate(const rhi::DevicePtr& device, rhi::BindlessTablePtr& table, const flatbuffers::Vector<flatbuffers::Offset<scene::Material>>& materialEntries)
+void MeshBuffers::allocate(const rhi::DevicePtr& device, rhi::BindlessTablePtr& table, const flatbuffers::Vector<const scene::Material*>& materialEntries)
 {
     rhi::StoragePtr storage = device->getStorage();
 
@@ -81,7 +81,9 @@ void MeshBuffers::allocate(const rhi::DevicePtr& device, rhi::BindlessTablePtr& 
         DrawSkin& skin = m_drawSkins[i];
 
         skin.textures = glm::uvec4(i, 0.f, 0.f, 0.f);
-        //m_files.emplace_back(storage->openFile(sys::ASSETS_DIR / material->diffuse()->string_view()));
+        //log::info(material->diffuse()->c_str());
+        //const fs::path path = sys::FileSystemService::Get().resolve(sys::FsTag_Textures, material->diffuse()->string_view());
+        //m_files.emplace_back(storage->openFile(path));
     }
 
     rhi::BufferDesc meshDesc;

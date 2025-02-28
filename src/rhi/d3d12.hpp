@@ -328,6 +328,7 @@ struct SwapChain : public ISwapChain
     std::array<TexturePtr, FrameCount> m_images;
     std::array<CommandPtr, FrameCount> m_command;
     const D3D12Context& m_context;
+    bool m_enableVSync = true;
 };
 
 struct StorageRequest

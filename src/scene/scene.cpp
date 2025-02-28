@@ -4,12 +4,57 @@
 
 #include "scene.hpp"
 #include "render/mesh.hpp"
-#include "scene_generated.h"
 
+#include <compressonator.h>
 #include <meshoptimizer.h>
 
+#define STB_IMAGE_IMPLEMENTATION
+#include <stb_image.h>
+
+#include <fstream>
 namespace ler::scene
 {
+// clang-format off
+static constexpr std::initializer_list<TexturePacker::MaterialFormatMapping> c_FormatMappings = {
+    { aiTextureType_BASE_COLOR,        CMP_FORMAT_BC1, TexturePacker::MT_BaseColor, 1 },
+    { aiTextureType_DIFFUSE,           CMP_FORMAT_BC1, TexturePacker::MT_Diffuse  , 1 },
+    { aiTextureType_METALNESS,         CMP_FORMAT_BC1, TexturePacker::MT_Metallic , 4 },
+    { aiTextureType_DIFFUSE_ROUGHNESS, CMP_FORMAT_BC1, TexturePacker::MT_Roughness, 4 },
+    { aiTextureType_AMBIENT_OCCLUSION, CMP_FORMAT_BC4, TexturePacker::MT_Occlusion, 3 },
+    { aiTextureType_LIGHTMAP,          CMP_FORMAT_BC4, TexturePacker::MT_Occlusion, 3 },
+    { aiTextureType_SPECULAR,          CMP_FORMAT_BC4, TexturePacker::MT_Specular , 4 },
+    { aiTextureType_EMISSIVE,          CMP_FORMAT_BC1, TexturePacker::MT_Emissive , 2 },
+    { aiTextureType_NORMALS,           CMP_FORMAT_BC1, TexturePacker::MT_Normal   , 0 }
+};
+// clang-format on
+
+std::string_view TexturePacker::toString(unsigned long matType)
+{
+    switch (matType)
+    {
+    case MT_OcclusionRoughnessMetallic:
+        return "OcclusionRoughnessMetallic";
+    case MT_RoughnessMetallic:
+        return "RoughnessMetallic";
+    case MT_Occlusion:
+        return "AmbientOcclusion";
+    case MT_BaseColor:
+        return "BaseColor";
+    case MT_Specular:
+        return "Specular";
+    case MT_Roughness:
+        return "Roughness";
+    case MT_Metallic:
+        return "Metallic";
+    case MT_Emissive:
+        return "Emissive";
+    case MT_Normal:
+        return "Normal";
+    default:
+        return "Undefined";
+    }
+}
+
 static void processSceneNode(std::vector<Instance>& instances, aiNode* aiNode, aiMesh** meshes)
 {
     for (size_t i = 0; i < aiNode->mNumMeshes; ++i)
@@ -40,52 +85,243 @@ static Vec3 toVec3(const aiVector3D& vec)
     return { vec.x, vec.y, vec.z };
 }
 
-std::vector<flatbuffers::Offset<Material>> exportMaterial(const aiScene* aiScene,
-                                                          flatbuffers::FlatBufferBuilder& builder)
+CMP_BOOL CompressionCallback(CMP_FLOAT fProgress, CMP_DWORD_PTR pUser1, CMP_DWORD_PTR pUser2)
+{
+    UNREFERENCED_PARAMETER(pUser1);
+    UNREFERENCED_PARAMETER(pUser2);
+
+    // std::printf("\rCompression progress = %3.0f", fProgress);
+
+    return false;
+}
+
+void CMP_LoadTexture(const aiTexture* texture, MipSet* mipSet)
+{
+    const auto* buffer = reinterpret_cast<const unsigned char*>(texture->pcData);
+
+    int width, height, componentCount;
+    stbi_uc* image = stbi_load_from_memory(buffer, static_cast<int>(texture->mWidth), &width, &height, &componentCount,
+                                           STBI_rgb_alpha);
+
+    CMP_CMIPS CMips;
+
+    if (!CMips.AllocateMipSet(mipSet, CF_8bit, TDT_ARGB, TT_2D, width, height, 1))
+        return;
+
+    if (!CMips.AllocateMipLevelData(CMips.GetMipLevel(mipSet, 0), width, height, CF_8bit, TDT_ARGB))
+        return;
+
+    mipSet->m_nMipLevels = 1;
+    mipSet->m_format = CMP_FORMAT_RGBA_8888;
+
+    CMP_BYTE* pData = CMips.GetMipLevel(mipSet, 0)->m_pbData;
+
+    // RGBA : 8888 = 4 bytes
+    CMP_DWORD dwPitch = (4 * mipSet->m_nWidth);
+    CMP_DWORD dwSize = dwPitch * mipSet->m_nHeight;
+
+    memcpy(pData, image, dwSize);
+
+    mipSet->pData = pData;
+    mipSet->dwDataSize = dwSize;
+
+    stbi_image_free(image);
+}
+
+TexturePacker::TexturePacker(const fs::path& name, fs::path root) : m_root(std::move(root))
+{
+    m_pathOut = sys::getHomeDir();
+    m_pathOut /= sys::PACKED_DIR;
+    m_pathOut /= name;
+    fs::create_directories(m_pathOut);
+    m_root.make_preferred();
+}
+
+uint32_t TexturePacker::addTexture(const fs::path& path, const MaterialFormatMapping& matMapping)
+{
+    uint32_t id;
+    if(m_textureMap.contains(path))
+    {
+        id = m_textureMap.at(path);
+    }
+    else
+    {
+        id = m_textureList.size();
+        m_textureList.emplace_back(path, matMapping.format);
+        m_textureMap.insert_or_assign(path, id);
+    }
+
+    TextureEntry& entry = m_textureList[id];
+    entry.flags |= matMapping.matType;
+    return id;
+}
+
+std::vector<std::string> TexturePacker::process(const aiScene* aiScene, flatbuffers::FlatBufferBuilder& builder)
+{
+    std::vector<std::string> textureVector;
+    for (TextureEntry& entry : m_textureList)
+    {
+        // log::info("{} -> [{}]", path.string(), fmt::join(e.second, ","));
+        std::string ext = entry.path.extension().string();
+        std::ranges::transform(ext, ext.begin(), ::tolower);
+        if (ext == ".dds")
+            continue;
+        entry.filename = exportTexture(aiScene, entry.path, entry.format);
+        textureVector.emplace_back(entry.filename.string());
+    }
+    return textureVector;
+}
+
+fs::path TexturePacker::exportTexture(const aiScene* aiScene, const fs::path& path, CMP_FORMAT compressedFormat)
+{
+    CMP_InitFramework();
+
+    MipSet MipSetIn = {};
+
+    fs::path pathOut = m_pathOut;
+    fs::path pathIn = path;
+    const aiTexture* em = aiScene->GetEmbeddedTexture(pathIn.string().c_str());
+    if (em == nullptr)
+    {
+        pathIn = m_root / pathIn;
+        CMP_LoadTexture(pathIn.string().c_str(), &MipSetIn);
+        pathOut /= path.filename();
+    }
+    else
+    {
+        CMP_LoadTexture(em, &MipSetIn);
+        pathOut /= em->mFilename.C_Str();
+    }
+
+    pathOut.replace_extension(".dds");
+    pathOut = pathOut.make_preferred();
+    std::string filename = pathOut.filename().string();
+    log::info("[Packer] Processing texture: {}", filename);
+
+    if (MipSetIn.m_nMipLevels <= 1)
+    {
+        CMP_INT requestLevel = 16;
+        CMP_INT nMinSize = CMP_CalcMinMipSize(MipSetIn.m_nHeight, MipSetIn.m_nWidth, requestLevel);
+        CMP_GenerateMIPLevels(&MipSetIn, nMinSize);
+    }
+
+    //==========================
+    // Set Compression Options
+    //==========================
+    KernelOptions kernel_options = {};
+
+    kernel_options.format = compressedFormat;
+    kernel_options.fquality = 1;
+    kernel_options.threads = 0;
+
+    //=====================================================
+    // example of using BC1 encoder options
+    // kernel_options.bc15 is valid for BC1 to BC5 formats
+    //=====================================================
+    {
+        // Enable punch through alpha setting
+        kernel_options.bc15.useAlphaThreshold = true;
+        kernel_options.bc15.alphaThreshold = 128;
+
+        // Enable setting channel weights
+        kernel_options.bc15.useChannelWeights = true;
+        kernel_options.bc15.channelWeights[0] = 0.3086f;
+        kernel_options.bc15.channelWeights[1] = 0.6094f;
+        kernel_options.bc15.channelWeights[2] = 0.0820f;
+    }
+
+    //--------------------------------------------------------------
+    // Setup a results buffer for the processed file,
+    // the content will be set after the source texture is processed
+    // in the call to CMP_ConvertMipTexture()
+    //--------------------------------------------------------------
+    CMP_MipSet MipSetCmp;
+    memset(&MipSetCmp, 0, sizeof(CMP_MipSet));
+
+    //===============================================
+    // Compress the texture using Compressonator Lib
+    //===============================================
+    CMP_ERROR cmp_status = CMP_ProcessTexture(&MipSetIn, &MipSetCmp, kernel_options, CompressionCallback);
+    if (cmp_status != CMP_OK)
+    {
+        CMP_FreeMipSet(&MipSetIn);
+        std::printf("Compression returned an error %d\n", cmp_status);
+        return {};
+    }
+
+    //----------------------------------------------------------------
+    // Save the result into a DDS file
+    //----------------------------------------------------------------
+    std::string file = pathOut.string();
+    cmp_status = CMP_SaveTexture(file.c_str(), &MipSetCmp);
+    CMP_FreeMipSet(&MipSetIn);
+    CMP_FreeMipSet(&MipSetCmp);
+
+    if (cmp_status != CMP_OK)
+    {
+        std::printf("Error %d: Saving processed file %ls!\n", cmp_status, pathOut.c_str());
+        return {};
+    }
+
+    return pathOut;
+}
+
+std::vector<Material> exportMaterial(const aiScene* aiScene,
+                                                          flatbuffers::FlatBufferBuilder& builder,
+                                                          TexturePacker& packer)
 {
     aiString filename;
     aiColor3D baseColor;
+    aiShadingMode aiShadingMode;
+    std::unordered_map<fs::path, std::bitset<16>> textures;
     flatbuffers::Offset<flatbuffers::String> n, d, r, o;
-    std::vector<flatbuffers::Offset<Material>> material_vector;
+    std::vector<Material> material_vector;
+
     for (size_t i = 0; i < aiScene->mNumMaterials; ++i)
     {
         aiMaterial* material = aiScene->mMaterials[i];
+        material->Get(AI_MATKEY_SHADING_MODEL, aiShadingMode);
         material->Get(AI_MATKEY_COLOR_DIFFUSE, baseColor);
+        material->Get(AI_MATKEY_NAME, filename);
+
+        ShadingMode shadingMode;
+        if(aiShadingMode == aiShadingMode_PBR_BRDF)
+        {
+            float factor;
+            aiReturn ret = material->Get(AI_MATKEY_GLOSSINESS_FACTOR, factor);
+            if(ret == aiReturn_SUCCESS)
+                shadingMode = ShadingMode::ShadingMode_PbrSpecularGlosiness;
+            else
+                shadingMode = ShadingMode::ShadingMode_PbrRoughnessMetallic;
+        }
+        else
+        {
+            shadingMode = ShadingMode::ShadingMode_Phong;
+        }
+
+        log::info("{}: {}", filename.C_Str(), EnumNameShadingMode(shadingMode));
+
         // materials[i].color = glm::vec3(baseColor.r, baseColor.g, baseColor.b);
-        if (material->GetTextureCount(aiTextureType_DIFFUSE) > 0)
+
+        std::array<uint16_t,6> mapColor = {};
+        for (const TexturePacker::MaterialFormatMapping& mapping : c_FormatMappings)
         {
-            material->GetTexture(aiTextureType_DIFFUSE, 0, &filename);
-            fs::path p = "sponza";
-            p /= filename.C_Str();
-            p.replace_extension(".DDS");
-            d = builder.CreateString(p.string());
+            if (material->GetTextureCount(mapping.textureType) > 0)
+            {
+                material->GetTexture(mapping.textureType, 0, &filename);
+                mapColor[mapping.index] = packer.addTexture(filename.C_Str(), mapping);
+                textures[filename.C_Str()] |= mapping.matType;
+            }
         }
-        if (material->GetTextureCount(aiTextureType_DIFFUSE_ROUGHNESS) > 0)
-        {
-            material->GetTexture(aiTextureType_DIFFUSE_ROUGHNESS, 0, &filename);
-            fs::path p = "sponza";
-            p /= filename.C_Str();
-            p.replace_extension(".DDS");
-            r = builder.CreateString(p.string());
-        }
-        if (material->GetTextureCount(aiTextureType_AMBIENT_OCCLUSION) > 0)
-        {
-            material->GetTexture(aiTextureType_AMBIENT_OCCLUSION, 0, &filename);
-            fs::path p = "sponza";
-            p /= filename.C_Str();
-            p.replace_extension(".DDS");
-            o = builder.CreateString(p.string());
-        }
-        if (material->GetTextureCount(aiTextureType_NORMALS) > 0)
-        {
-            material->GetTexture(aiTextureType_NORMALS, 0, &filename);
-            fs::path p = "sponza";
-            p /= filename.C_Str();
-            p.replace_extension(".DDS");
-            n = builder.CreateString(p.string());
-        }
-        material_vector.emplace_back(CreateMaterial(builder, n, d, r, o));
+
+        for(auto& e : textures)
+            log::info(" - {} -> {}", e.first.string(), TexturePacker::toString(e.second.to_ulong()));
+
+        // n = builder.CreateString(p.string());
+        material_vector.emplace_back(shadingMode, mapColor);
+        textures.clear();
     }
+
     return material_vector;
 }
 
@@ -96,6 +332,7 @@ void SceneImporter::prepare(const fs::path& path, const std::string& output)
     unsigned int postProcess = aiProcessPreset_TargetRealtime_Fast;
     postProcess |= aiProcess_ConvertToLeftHanded;
     postProcess |= aiProcess_GenBoundingBoxes;
+    postProcess |= aiProcess_GenUVCoords;
     const aiScene* aiScene = importer.ReadFile(path.string(), postProcess);
 
     if (aiScene == nullptr || aiScene->mNumMeshes == 0)
@@ -103,6 +340,12 @@ void SceneImporter::prepare(const fs::path& path, const std::string& output)
         log::error(importer.GetErrorString());
         return;
     }
+
+    TexturePacker texturePacker(path.stem(), path.parent_path());
+    flatbuffers::FlatBufferBuilder builder(32768);
+    std::vector<Material> material_vector = exportMaterial(aiScene, builder, texturePacker);
+    exportMaterial(aiScene, builder, texturePacker);
+    auto texture_vector = texturePacker.process(aiScene, builder);
 
     uint64_t indexCount = 0;
     uint64_t vertexCount = 0;
@@ -210,14 +453,12 @@ void SceneImporter::prepare(const fs::path& path, const std::string& output)
     outputPath.replace_extension(".mesh");
     f.open(sys::ASSETS_DIR / outputPath, std::ios::binary);
 
-    flatbuffers::FlatBufferBuilder builder(32768);
-    std::vector<flatbuffers::Offset<Material>> material_vector = exportMaterial(aiScene, builder);
-
     auto instances = builder.CreateVectorOfStructs(instance_vector);
-    auto materials = builder.CreateVector(material_vector);
+    auto materials = builder.CreateVectorOfStructs(material_vector);
+    auto textures = builder.CreateVectorOfStrings(texture_vector);
     auto buffers = builder.CreateVectorOfStructs(buffer_vector);
     auto meshes = builder.CreateVectorOfStructs(mesh_vector);
-    auto scene = CreateScene(builder, instances, materials, buffers, meshes);
+    auto scene = CreateScene(builder, instances, materials, textures, buffers, meshes);
     FinishSceneBuffer(builder, scene);
 
     uint8_t* buf = builder.GetBufferPointer();

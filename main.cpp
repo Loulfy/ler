@@ -5,7 +5,6 @@
 #include "pass/forward_indexed.hpp"
 #include "pass/deferred_scene.hpp"
 #include "render/pass.hpp"
-#include "scene/scene.hpp"
 
 using namespace ler;
 
@@ -19,7 +18,7 @@ class TestLoadOneTex final : public rhi::IRenderPass
     rhi::Latch latch;
     uint32_t texId = 0;
 
-    static constexpr uint32_t kTexCount = 2;
+    static constexpr uint32_t kTexCount = 256;
 
     [[nodiscard]] bool startup() const override
     {
@@ -47,17 +46,31 @@ class TestLoadOneTex final : public rhi::IRenderPass
         sampler = device->createSampler(sd);
         rhi::StoragePtr storage = device->getStorage();
 
-        table = device->createBindlessTable(128);
+        table = device->createBindlessTable(1024);
         table->setSampler(sampler, 0);
 
-        latch = std::make_shared<coro::latch>(1);
+        latch = std::make_shared<coro::latch>(10);
         //rhi::ReadOnlyFilePtr file = storage->openFile(sys::ASSETS_DIR / "grid01.KTX2");
         //rhi::ReadOnlyFilePtr file = storage->openFile(sys::ASSETS_DIR / "Wood_BaseColor.dds");
         //rhi::ReadOnlyFilePtr file = storage->openFile(sys::ASSETS_DIR / "sponza" / "332936164838540657.DDS");
         //rhi::ReadOnlyFilePtr file = storage->openFile(sys::ASSETS_DIR / "Textures" / "Pavement_Cobble_Leaves_BLENDSHADER_Normal.dds");
-        auto files = storage->openFiles(sys::ASSETS_DIR, ".dds");
+        //auto files = storage->openFiles(sys::getHomeDir() / sys::PACKED_DIR / "sponza", ".dds");
+        //auto files = storage->openFiles(R"(C:\Users\loria\Downloads\Bistro_v5_2\Bistro_v5_2\Textures)", ".dds");
+        //fs::path t = sys::getHomeDir() / sys::PACKED_DIR / "nairo" / "bricks02_diffuse.dds";
+        //std::vector<rhi::ReadOnlyFilePtr> files;
+        //files.emplace_back(storage->openFile(t));
         //auto files = storage->openFiles(R"(/Users/lcorbel/Downloads/Bistro_v5_2/Textures)", ".dds");
-        storage->requestLoadTexture(*latch, table, std::span(files.data(), kTexCount));
+        //storage->requestLoadTexture(*latch, table, std::span(files.data(), kTexCount));
+
+        std::vector<fs::path> paths;
+        paths.reserve(512);
+        for (const fs::directory_entry& entry : fs::directory_iterator(R"(C:\Users\loria\Downloads\Bistro_v5_2\Bistro_v5_2\Textures)"))
+        {
+            if (entry.is_regular_file() && entry.path().extension() == ".dds")
+                paths.emplace_back(entry.path());
+        }
+        storage->requestOpenTexture(*latch, table, paths);
+
         async::sync_wait(*latch);
     }
 
@@ -112,7 +125,7 @@ class TestForward final : public rhi::IRenderPass, public render::IMeshRenderer
         meshList.setMeshBuffers(&meshBuffers);
 
         table = device->createBindlessTable(128);
-        table->appendResource(meshList.getInstanceBuffer());
+        rhi::ResourceViewPtr vi = table->createResourceView(meshList.getInstanceBuffer());
 
         std::vector<rhi::ShaderModule> modules;
         modules.emplace_back("cached/wireframe.frag", "main", rhi::ShaderType::Pixel);
@@ -228,7 +241,9 @@ class TestIndirect final : public rhi::IRenderPass, public render::IMeshRenderer
     rhi::BufferPtr staging;
     rhi::BufferPtr clearer;
     rhi::BufferPtr readback;
-    CullIndex cullRes;
+    //CullIndex cullRes;
+    uint32_t cullRes[5] = {};
+    std::array<rhi::ResourceViewPtr,5> cullViews;
 
     rhi::BufferPtr drawConstant;
     rhi::BufferPtr cullConstant;
@@ -247,7 +262,7 @@ class TestIndirect final : public rhi::IRenderPass, public render::IMeshRenderer
         meshList.installStaticScene(device, *scene->instances());
         meshList.setMeshBuffers(&meshBuffers);
 
-        table = device->createBindlessTable(128);
+        table = device->createBindlessTable(2048);
         //table->setResource(meshList.getInstanceBuffer(), 0);
 
         rhi::ShaderModule module("cached/cullmesh.comp", "CSMain", rhi::ShaderType::Compute);
@@ -459,11 +474,19 @@ class TestIndirect final : public rhi::IRenderPass, public render::IMeshRenderer
         buffDesc.debugName = "cullConstant";
         cullConstant = device->createBuffer(buffDesc);
 
-        cullRes.propIndex = table->appendResource(meshList.getInstanceBuffer());
+        /*cullRes.propIndex = table->appendResource(meshList.getInstanceBuffer());
         cullRes.meshIndex = table->appendResource(meshBuffers.getMeshBuffer());
         cullRes.drawIndex = table->appendResource(drawsBuffer);
         cullRes.countIndex = table->appendResource(countBuffer);
-        cullRes.frustIndex = table->appendResource(frustBuffer);
+        cullRes.frustIndex = table->appendResource(frustBuffer);*/
+
+        cullViews[0] = table->createResourceView(meshList.getInstanceBuffer());
+        cullViews[1] = table->createResourceView(meshBuffers.getMeshBuffer());
+        cullViews[2] = table->createResourceView(drawsBuffer);
+        cullViews[3] = table->createResourceView(countBuffer);
+        cullViews[4] = table->createResourceView(frustBuffer);
+        for(int i = 0; i < 5; ++i)
+            cullRes[i] = cullViews[i]->getBindlessIndex();
     }
 };
 

@@ -10,7 +10,7 @@ find_package(unofficial-spirv-reflect CONFIG REQUIRED)
 find_package(VulkanMemoryAllocator CONFIG REQUIRED)
 find_package(meshoptimizer CONFIG REQUIRED)
 find_package(nlohmann_json CONFIG REQUIRED)
-#find_package(directx-dxc CONFIG REQUIRED)
+find_package(directx-dxc CONFIG REQUIRED)
 find_package(flatbuffers CONFIG REQUIRED)
 find_package(glslang CONFIG REQUIRED)
 find_package(imgui CONFIG REQUIRED)
@@ -44,6 +44,8 @@ set(SRC
     "src/sys/ioring.hpp"
     "src/sys/ioring.cpp"
     "src/sys/thread.hpp"
+    "src/sys/mpsc.hpp"
+    "src/sys/mpsc.inl"
     "src/sys/task.hpp"
     "src/sys/file.hpp"
     "src/sys/file.cpp"
@@ -87,8 +89,8 @@ set(SRC
     "src/render/mesh.cpp"
     "src/render/graph.hpp"
     "src/render/graph.cpp"
-    "src/scene/scene.hpp"
-    "src/scene/scene.cpp"
+    #"src/scene/scene.hpp"
+    #"src/scene/scene.cpp"
     "src/pass/forward_indexed.hpp"
     "src/pass/culling_command.hpp"
     "src/pass/deferred_scene.hpp"
@@ -97,6 +99,7 @@ set(SRC
 set(SRC_PACKER
     "src/scene/scene.hpp"
     "src/scene/scene.cpp"
+    "src/sys/utils.cpp"
 )
 
 if (CMAKE_SYSTEM_NAME STREQUAL "Windows")
@@ -158,7 +161,7 @@ target_link_libraries(gdev PRIVATE assimp::assimp)
 target_link_libraries(gdev PRIVATE unofficial::spirv-reflect::spirv-reflect)
 target_link_libraries(gdev PRIVATE glslang::OSDependent glslang::glslang glslang::MachineIndependent glslang::GenericCodeGen glslang::glslang-default-resource-limits glslang::OGLCompiler glslang::SPVRemapper glslang::SPIRV glslang::HLSL)
 target_link_libraries(gdev PRIVATE Vulkan::Vulkan GPUOpen::VulkanMemoryAllocator)
-#target_link_libraries(gdev PRIVATE Microsoft::DirectXShaderCompiler)
+target_link_libraries(gdev PRIVATE Microsoft::DirectXShaderCompiler)
 target_include_directories(gdev PRIVATE ${Stb_INCLUDE_DIR})
 target_link_libraries(gdev PRIVATE generated_cppmessages)
 target_link_libraries(gdev PRIVATE flatbuffers::flatbuffers)
@@ -203,6 +206,11 @@ elseif (CMAKE_SYSTEM_NAME STREQUAL "Darwin")
     target_include_directories(gdev PRIVATE "libs/metal-cpp")
 endif()
 
+set(OPTION_BUILD_CMP_SDK ON)
+set(OPTION_ENABLE_ALL_APPS OFF)
+set(CMAKE_POLICY_DEFAULT_CMP0077 NEW)
+add_subdirectory(libs/compressonator)
+
 add_executable(packer pack.cpp ${SRC_PACKER} ${PROTO_SRCS} ${PROTO_HDRS})
 add_dependencies(packer GENERATE_generated_cppmessages)
 target_link_libraries(packer PRIVATE spdlog::spdlog)
@@ -210,3 +218,7 @@ target_link_libraries(packer PRIVATE assimp::assimp)
 target_link_libraries(packer PRIVATE generated_cppmessages)
 target_link_libraries(packer PRIVATE flatbuffers::flatbuffers)
 target_link_libraries(packer PRIVATE meshoptimizer::meshoptimizer)
+target_link_libraries(packer PRIVATE CMP_Framework)
+if (CMAKE_SYSTEM_NAME STREQUAL "Windows")
+    target_link_libraries(packer PRIVATE dxguid wbemuuid)
+endif()

@@ -8,6 +8,7 @@
 #include "img/ktx.hpp"
 #include "rhi.hpp"
 #include "sys/ioring.hpp"
+#include "sys/mpsc.hpp"
 
 #include <semaphore>
 #include <memory_resource>
@@ -23,6 +24,7 @@ class CommonStorage : public IStorage
 
     void requestLoadTexture(coro::latch& latch, BindlessTablePtr& table, const std::span<ReadOnlyFilePtr>& files) override;
     void requestLoadBuffer(coro::latch& latch, const ReadOnlyFilePtr& file, BufferPtr& buffer, uint64_t fileLength, uint64_t fileOffset) override;
+    void requestOpenTexture(coro::latch& latch, BindlessTablePtr& table, const std::span<fs::path>& paths) override;
 
     img::ITexture* factoryTexture(const ReadOnlyFilePtr& file, std::byte* metadata);
     const BufferPtr& getStaging(int index) const { return m_stagings[index]; }
@@ -31,18 +33,21 @@ class CommonStorage : public IStorage
     void releaseStaging(uint32_t index);
 
     static constexpr int kStagingCount = 8;
-    static constexpr uint32_t kStagingSize = sys::C64Mio;
+    static constexpr uint32_t kStagingSize = sys::C128Mio;
 
   protected:
     IDevice* m_device = nullptr;
     std::vector<BufferPtr> m_stagings;
+    sys::MpscQueue<int> m_dispatcher;
 
   private:
     virtual coro::task<> makeSingleTextureTask(coro::latch& latch, BindlessTablePtr table, ReadOnlyFilePtr file) = 0;
     virtual coro::task<> makeMultiTextureTask(coro::latch& latch, BindlessTablePtr table, std::vector<ReadOnlyFilePtr> files) = 0;
     virtual coro::task<> makeBufferTask(coro::latch& latch, ReadOnlyFilePtr file, BufferPtr buffer, uint64_t fileLength, uint64_t fileOffset) = 0;
 
-    using task_container = coro::task_container<coro::thread_pool>;
+    coro::task<> makeOpenTextureTask(coro::latch& latch, BindlessTablePtr& table, std::vector<fs::path> paths);
+
+    using task_container = coro::thread_pool&;
     task_container m_scheduler;
 
     sys::Bitset m_bitset;

@@ -5,7 +5,7 @@
   "dependencies": [
     {
       "name": "directx-dxc",
-      "version>=": "2024-07-31",
+      "version>=": "2025-02-20",
       "platform": "windows | linux"
     },
     {
@@ -88,7 +88,7 @@
     },
     {
       "name": "libcoro",
-      "version>=": "0.11.1",
+      "version>=": "0.14.1",
       "default-features": false
     },
     {

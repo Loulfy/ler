@@ -49,6 +49,7 @@ uint64_t getRamCapacity();
 
 static const fs::path ASSETS_DIR = fs::path(PROJECT_DIR) / "assets";
 static const fs::path CACHED_DIR = fs::path("cached");
+static const fs::path PACKED_DIR = fs::path(".ler");
 
 static constexpr uint32_t C04Mio = 4 * 1024 * 1024;
 static constexpr uint32_t C08Mio = 8 * 1024 * 1024;

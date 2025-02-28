@@ -80,6 +80,8 @@ namespace ler::app
         io.DisplaySize = ImVec2(static_cast<float>(w), static_cast<float>(h));
         // io.ConfigFlags = ImGuiConfigFlags_DockingEnable;
         ImGui::StyleColorsDark();
+
+        //sys::FileSystemService::Get().mount(sys::FsTag_Textures, sys::StdFileSystem::Create(R"(C:\Users\loria\Downloads\Bistro_v5_2\Bistro_v5_2)"));
     }
 
     void DesktopApp::updateWindowIcon(const fs::path& path) const

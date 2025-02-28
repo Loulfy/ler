@@ -155,7 +155,7 @@ using ShaderPtr = std::shared_ptr<Shader>;
 class BindlessTable final : public CommonBindlessTable
 {
   public:
-    explicit BindlessTable(const VulkanContext& context);
+    BindlessTable(const VulkanContext& context, uint32_t count);
     void setSampler(const SamplerPtr& sampler, uint32_t slot) override;
 
     static vk::UniqueDescriptorSetLayout buildBindlessLayout(const VulkanContext& context, uint32_t count);

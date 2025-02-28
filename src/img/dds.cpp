@@ -99,8 +99,11 @@ uint32_t DdsTexture::computeMipmapSize(int32_t dxgiFormat, uint32_t width, uint3
     // which the BCn compressed formats are.
     if ((dxgiFormat >= 70 && dxgiFormat <= 84) || (dxgiFormat >= 94 && dxgiFormat <= 99))
     {
-        auto pitch = std::max(1u, (width + 3) / 4) * formatSize.blockSizeByte;
-        return pitch * std::max(1u, (height + 3) / 4);
+        uint32_t blockWide = std::max(1u, (width + 3) / 4);
+        uint32_t blockHigh = std::max(1u, (height + 3) / 4);
+
+        uint32_t rowPitchBytes = blockWide * formatSize.blockSizeByte;
+        return rowPitchBytes * blockHigh;
     }
 
     // These formats are special
@@ -181,11 +184,17 @@ void DdsTexture::init()
 [[nodiscard]] uint32_t DdsTexture::getRowPitch(uint32_t level) const
 {
 
-    const uint32_t blockCount = std::max(1u, (header.width / formatSize.blockWidth) >> level);
-    uint32_t pitch = blockCount * formatSize.blockSizeByte;
-    // Pad ROW
-    auto rowPadding = static_cast<uint32_t>(4 * std::ceil((float)pitch / 4.f) - (float)pitch);
-    pitch += rowPadding;
+    uint32_t pitch;
+    if ((format >= 70 && format <= 84) || (format >= 94 && format <= 99))
+    {
+        const uint32_t blockCount = std::max(1u, ((header.width >> level) + 3) / 4);
+        pitch = blockCount * formatSize.blockSizeByte;
+    }
+    else
+    {
+        uint32_t bitsPerPixel = formatSize.blockSizeByte * 8;
+        pitch = std::max(1u, static_cast<uint32_t>((header.width * bitsPerPixel + 7) / 8)) * header.height;
+    }
 
     /*if ((format >= 70 && format <= 84) ||
         (format >= 94 && format <= 99))

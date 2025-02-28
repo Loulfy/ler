@@ -100,6 +100,8 @@ void SwapChain::resize(uint32_t width, uint32_t height, bool vsync)
         }
     }*/
 
+    m_enableVSync = vsync;
+
     for (UINT n = 0; n < FrameCount; n++)
     {
         m_fenceValues[n] = m_fenceValues[m_frameIndex];
@@ -172,7 +174,10 @@ uint32_t SwapChain::present(const RenderPass& renderPass)
     ID3D12CommandList* ppCommandLists[] = { command->m_commandList.Get() };
     m_commandQueue->ExecuteCommandLists(1, ppCommandLists);
 
-    handle->Present(1, 0);
+    if(m_enableVSync)
+        handle->Present(1, 0);
+    else
+        handle->Present(0, DXGI_PRESENT_ALLOW_TEARING);
 
     // Schedule a Signal command in the queue.
     const UINT64 currentFenceValue = m_fenceValues[m_frameIndex];

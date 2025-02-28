@@ -6,7 +6,8 @@
 
 namespace ler::rhi::vulkan
 {
-BindlessTable::BindlessTable(const VulkanContext& context) : m_context(context), m_bufferDescriptor(context)
+BindlessTable::BindlessTable(const VulkanContext& context, uint32_t count)
+    : CommonBindlessTable(count), m_context(context), m_bufferDescriptor(context)
 {
     vk::DeviceSize layoutSize;
     m_context.device.getDescriptorSetLayoutSizeEXT(m_context.bindlessLayout, &layoutSize);
@@ -182,6 +183,6 @@ vk::DeviceAddress BindlessTable::bufferDescriptorGPUAddress() const
 
 BindlessTablePtr Device::createBindlessTable(uint32_t count)
 {
-    return std::make_shared<BindlessTable>(m_context);
+    return std::make_shared<BindlessTable>(m_context, count);
 }
 } // namespace ler::rhi::vulkan

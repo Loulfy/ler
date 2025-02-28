@@ -4,6 +4,10 @@ struct Mat4 {
     data:[float:16];
 }
 
+struct TextureMap {
+    data:[uint16:6];
+}
+
 struct Vec3 {
     x:float;
     y:float;
@@ -60,16 +64,26 @@ struct Buffer {
     type:BufferType;
 }
 
-table Material {
-    normal:string;
-    diffuse:string;
-    roughness:string;
-    occlusion:string;
+enum ShadingMode : byte { PbrRoughnessMetallic, PbrSpecularGlosiness, Phong }
+
+struct Material {
+    shading:ShadingMode;
+    texture:[uint16:6];
+    //normal:uint16;
+    //diffuse:uint16;
+    //emissive:uint16;
+    //occlusion:uint16;
+    //extension:uint16;
+}
+
+table Texture {
+    filename:string;
 }
 
 table Scene {
     instances:[Instance];
     materials:[Material];
+    textures:[string];
     buffers:[Buffer];
     meshes:[Mesh];
 }

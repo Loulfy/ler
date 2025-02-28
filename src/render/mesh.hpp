@@ -31,7 +31,7 @@ class MeshBuffers
 {
   public:
     void allocate(const rhi::DevicePtr& device, const flatbuffers::Vector<const scene::Buffer*>& bufferEntries);
-    void allocate(const rhi::DevicePtr& device, rhi::BindlessTablePtr& table, const flatbuffers::Vector<flatbuffers::Offset<scene::Material>>& materialEntries);
+    void allocate(const rhi::DevicePtr& device, rhi::BindlessTablePtr& table, const flatbuffers::Vector<const scene::Material*>& materialEntries);
     void load(const flatbuffers::Vector<const scene::Mesh*>& meshEntries);
     void bind(const rhi::CommandPtr& cmd, bool prePass) const;
     void bind(rhi::EncodeIndirectIndexedDrawDesc& drawDesc, bool prePass) const;

@@ -136,16 +136,34 @@ class ISampler : public IResource
 using SamplerPtr = std::shared_ptr<ISampler>;
 
 using ResourcePtr = std::variant<TexturePtr, BufferPtr>;
+
+class IBindlessTable;
+class ShaderResourceView
+{
+    uint32_t m_index = 0u;
+    // ResourcePtr m_resource;
+    IBindlessTable* m_allocator = nullptr;
+
+  public:
+    friend class CommonBindlessTable;
+    ~ShaderResourceView();
+    void destroy();
+    [[nodiscard]] uint32_t getBindlessIndex() const;
+};
+
+using ResourceViewPtr = std::shared_ptr<ShaderResourceView>;
+
 class IBindlessTable
 {
   public:
     virtual ~IBindlessTable() = default;
-    virtual uint32_t allocate() = 0;
-    virtual uint32_t appendResource(const ResourcePtr& res) = 0;
-    virtual bool setResource(const ResourcePtr& res, uint32_t slot) = 0;
     virtual void setSampler(const SamplerPtr& sampler, uint32_t slot) = 0;
+    [[nodiscard]] virtual ResourceViewPtr createResourceView(const ResourcePtr& res) = 0;
     [[nodiscard]] virtual TexturePtr getTexture(uint32_t slot) const = 0;
     [[nodiscard]] virtual BufferPtr getBuffer(uint32_t slot) const = 0;
+    [[nodiscard]] virtual std::lock_guard<std::mutex> lock() = 0;
+    [[nodiscard]] virtual uint32_t newBindlessIndex() = 0;
+    virtual void freeBindlessIndex(uint32_t index) = 0;
 };
 
 using BindlessTablePtr = std::shared_ptr<IBindlessTable>;
@@ -287,6 +305,8 @@ class IReadOnlyFile
 
 using ReadOnlyFilePtr = std::shared_ptr<IReadOnlyFile>;
 
+using BundleResourceView = std::vector<ShaderResourceView>;
+
 class IStorage
 {
   public:
@@ -298,6 +318,7 @@ class IStorage
                                     const std::span<ReadOnlyFilePtr>& files) = 0;
     virtual void requestLoadBuffer(coro::latch& latch, const ReadOnlyFilePtr& file, BufferPtr& buffer,
                                    uint64_t fileLength, uint64_t fileOffset) = 0;
+    virtual void requestOpenTexture(coro::latch& latch, BindlessTablePtr& table, const std::span<fs::path>& paths) = 0;
 };
 
 using StoragePtr = std::shared_ptr<IStorage>;
@@ -326,7 +347,7 @@ class IDevice
 
     // Pipeline
     void shaderAutoCompile();
-    void compileShader(const ShaderModule& shaderModule, const fs::path& output);
+    static void compileShader(const ShaderModule& shaderModule, const fs::path& output);
     [[nodiscard]] virtual BindlessTablePtr createBindlessTable(uint32_t count) = 0;
 
     [[nodiscard]] virtual PipelinePtr createGraphicsPipeline(const std::span<ShaderModule>& shaderModules,
