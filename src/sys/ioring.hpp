@@ -106,5 +106,6 @@ class IoService
     std::queue<IoBatchRequest> m_tasks = {};
     static std::mutex m_tasks_mutex;
     std::shared_ptr<coro::thread_pool> m_threadPool;
+    std::atomic_flag m_setup_mutex = ATOMIC_FLAG_INIT;
 };
 } // namespace ler::sys

@@ -190,7 +190,7 @@ fs::path TexturePacker::exportTexture(const aiScene* aiScene, const fs::path& pa
     else
     {
         CMP_LoadTexture(em, &MipSetIn);
-        pathOut /= em->mFilename.C_Str();
+        pathOut /= em->mFilename.length == 0 ? path.stem() : em->mFilename.C_Str();
     }
 
     pathOut.replace_extension(".dds");
@@ -259,7 +259,7 @@ fs::path TexturePacker::exportTexture(const aiScene* aiScene, const fs::path& pa
 
     if (cmp_status != CMP_OK)
     {
-        std::printf("Error %d: Saving processed file %ls!\n", cmp_status, pathOut.c_str());
+        std::printf("Error %d: Saving processed file %s!\n", cmp_status, pathOut.c_str());
         return {};
     }
 

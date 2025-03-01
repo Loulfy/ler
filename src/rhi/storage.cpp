@@ -19,8 +19,8 @@ CommonStorage::CommonStorage(IDevice* device, std::shared_ptr<coro::thread_pool>
 
 void CommonStorage::update()
 {
-    //if (m_scheduler.empty())
-      //  m_memory.release();
+    // if (m_scheduler.empty())
+    //   m_memory.release();
 }
 
 std::vector<ReadOnlyFilePtr> CommonStorage::openFiles(const fs::path& path, const fs::path& ext)
@@ -83,17 +83,18 @@ void CommonStorage::requestOpenTexture(coro::latch& latch, BindlessTablePtr& tab
     m_scheduler.spawn(makeOpenTextureTask(latch, table, std::move(fileList)));
 }
 
-coro::task<> CommonStorage::makeOpenTextureTask(coro::latch& latch, BindlessTablePtr& table, std::vector<fs::path> paths)
+coro::task<> CommonStorage::makeOpenTextureTask(coro::latch& latch, BindlessTablePtr& table,
+                                                std::vector<fs::path> paths)
 {
     int i = 0;
-    uint64_t byteSizes;
     uint64_t totalByteSizes = 0;
     std::vector<ReadOnlyFilePtr> files;
-    for(const fs::path& p : paths)
+    for (const fs::path& p : paths)
     {
         ReadOnlyFilePtr file = openFile(p);
-        byteSizes = file->sizeInBytes();
-        if(totalByteSizes + byteSizes > kStagingSize)
+        static constexpr uint64_t alignment = 16;
+        const uint64_t byteSizes = align(file->sizeInBytes(), alignment);
+        if (totalByteSizes + byteSizes > kStagingSize)
         {
             m_scheduler.spawn(makeMultiTextureTask(latch, table, std::move(files)));
             totalByteSizes = 0;
@@ -104,6 +105,12 @@ coro::task<> CommonStorage::makeOpenTextureTask(coro::latch& latch, BindlessTabl
         files.emplace_back(file);
     }
 
+    if (!files.empty())
+    {
+        m_scheduler.spawn(makeMultiTextureTask(latch, table, std::move(files)));
+        ++i;
+    }
+
     log::info("Requested {} bundles", i);
 
     co_return;
@@ -111,18 +118,28 @@ coro::task<> CommonStorage::makeOpenTextureTask(coro::latch& latch, BindlessTabl
 
 void CommonStorage::releaseStaging(uint32_t index)
 {
-    m_semaphore.release();
     const std::scoped_lock staging_lock(m_mutex);
     m_bitset.clear(index);
+    m_semaphore.release();
 }
 
-int CommonStorage::acquireStaging()
+coro::task<int> CommonStorage::acquireStaging()
 {
-    m_semaphore.acquire();
+    // If no staging buffers are available re-schedule the task
+    while (!m_semaphore.try_acquire())
+        co_await m_scheduler.schedule();
     const std::scoped_lock staging_lock(m_mutex);
     const int idx = m_bitset.findFirst();
     m_bitset.set(idx);
-    return idx;
+    co_return idx;
 }
 
+CommonStorage::ReSchedule::ReSchedule(CommonStorage& storage) : m_storage(storage)
+{
+}
+
+void CommonStorage::ReSchedule::await_suspend(std::coroutine_handle<> handle) const noexcept
+{
+    m_storage.m_scheduler.resume(handle);
+}
 } // namespace ler::rhi

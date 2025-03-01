@@ -29,11 +29,22 @@ class CommonStorage : public IStorage
     img::ITexture* factoryTexture(const ReadOnlyFilePtr& file, std::byte* metadata);
     const BufferPtr& getStaging(int index) const { return m_stagings[index]; }
 
-    int acquireStaging();
+    coro::task<int> acquireStaging();
     void releaseStaging(uint32_t index);
 
     static constexpr int kStagingCount = 8;
-    static constexpr uint32_t kStagingSize = sys::C128Mio;
+    static constexpr uint32_t kStagingSize = sys::C64Mio;
+
+    class ReSchedule : public std::suspend_always
+    {
+        friend class CommonStorage;
+        CommonStorage& m_storage;
+
+    public:
+
+        explicit ReSchedule(CommonStorage& storage);
+        void await_suspend(std::coroutine_handle<> handle) const noexcept;
+    };
 
   protected:
     IDevice* m_device = nullptr;

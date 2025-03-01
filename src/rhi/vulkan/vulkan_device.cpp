@@ -118,7 +118,10 @@ void populateRequiredDeviceExtensions(const VulkanFeatures& features, std::vecto
 
     // Malloc staging buffer
     if (features.hostBuffer)
+    {
+        deviceExtensions.emplace_back(VK_EXT_EXTERNAL_MEMORY_HOST_EXTENSION_NAME);
         deviceExtensions.emplace_back(VK_KHR_EXTERNAL_MEMORY_EXTENSION_NAME);
+    }
 
     // Enable Mutable Descriptor
     if (features.mutableDescriptor)
@@ -155,7 +158,7 @@ void unlinkUnsupportedFeatures(InfoChain& createInfoChain, const VulkanFeatures&
 
     if (minor == 2)
         createInfoChain.unlink<vk::PhysicalDeviceVulkan13Features>();
-    if (minor == 3)
+    if (minor == 3 || minor == 4)
     {
         createInfoChain.unlink<vk::PhysicalDeviceSynchronization2Features>();
         createInfoChain.unlink<vk::PhysicalDeviceDynamicRenderingFeatures>();
@@ -175,7 +178,7 @@ void unlinkUnsupportedFeatures(InfoChain& createInfoChain, const VulkanFeatures&
 
 Device::Device(const DeviceConfig& config)
 {
-    static const vk::DynamicLoader dl;
+    static const vk::detail::DynamicLoader dl;
     const auto vkGetInstanceProcAddr = dl.getProcAddress<PFN_vkGetInstanceProcAddr>("vkGetInstanceProcAddr");
     VULKAN_HPP_DEFAULT_DISPATCHER.init(vkGetInstanceProcAddr);
 
@@ -355,7 +358,7 @@ Device::Device(const DeviceConfig& config)
 
     // Create Memory Allocator
     VmaAllocatorCreateInfo allocatorCreateInfo = {};
-    allocatorCreateInfo.vulkanApiVersion = vulkanFeatures.apiVersion;
+    allocatorCreateInfo.vulkanApiVersion = appInfo.apiVersion;
     allocatorCreateInfo.device = m_device.get();
     allocatorCreateInfo.instance = m_instance.get();
     allocatorCreateInfo.physicalDevice = m_physicalDevice;
@@ -375,7 +378,7 @@ Device::Device(const DeviceConfig& config)
     m_context.allocator = allocator;
     m_context.debug = config.debug;
 
-    m_bindlessLayout = BindlessTable::buildBindlessLayout(m_context, 128);
+    m_bindlessLayout = BindlessTable::buildBindlessLayout(m_context, 1024);
     m_context.descBufferProperties = pp.get<vk::PhysicalDeviceDescriptorBufferPropertiesEXT>();
     m_context.bindlessLayout = m_bindlessLayout.get();
 

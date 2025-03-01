@@ -26,6 +26,7 @@ IoService::IoService(std::shared_ptr<coro::thread_pool>& tp) : m_threadPool(tp)
 {
     constexpr uint32_t num_threads = kWorkerCount;
     m_threads = std::make_unique<std::jthread[]>(num_threads);
+    m_setup_mutex.test_and_set(std::memory_order_acquire);
     for (unsigned int i = 0; i < num_threads; ++i)
         m_threads[i] = std::jthread(std::bind_front(&IoService::worker, this));
 }
@@ -68,10 +69,14 @@ void IoService::registerBuffers(std::vector<BufferInfo>& buffers, bool enabled)
         m_buffers.emplace_back(b.address, b.length);
     if (enabled)
     {
+        // SpinLock waiting for setup to be completed
+        while (m_setup_mutex.test_and_set(std::memory_order_acquire)) {;}
 #ifdef PLATFORM_WIN
         const int res = BuildIoRingRegisterBuffers(m_ring, m_buffers.size(), m_buffers.data(), 0);
 #elif PLATFORM_LINUX
         const int res = io_uring_register_buffers(&m_ring, m_buffers.data(), m_buffers.size());
+        if (res < 0)
+            log::error("[IoRing] Failed to register buffers: {}", strerror(-res));
 #endif
         // assert(res == 0);
     }
@@ -95,6 +100,7 @@ void IoService::worker(const std::stop_token& stoken)
     flags.Advisory = IORING_CREATE_ADVISORY_FLAGS_NONE;
     res = CreateIoRing(capabilities.MaxVersion, flags, 0x10000, 0x20000, &m_ring);
     assert(res == S_OK);
+    m_setup_mutex.clear(std::memory_order_release);
 
     IoBatchRequest batch;
     uint32_t submittedEntries;
@@ -160,6 +166,7 @@ void IoService::worker(const std::stop_token& stoken)
 #elif PLATFORM_LINUX
     int res = io_uring_queue_init(1024, &m_ring, 0);
     assert(res == 0);
+    m_setup_mutex.clear(std::memory_order_release);
 
     IoBatchRequest batch;
     uint32_t submittedEntries;

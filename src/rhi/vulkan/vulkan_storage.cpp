@@ -44,7 +44,7 @@ coro::task<> Storage::makeSingleTextureTask(coro::latch& latch, BindlessTablePtr
 {
     sys::IoService::FileLoadRequest request;
     queueTexture(file, request);
-    const int bufferIndex = acquireStaging();
+    const int bufferIndex = co_await acquireStaging();
     request.buffIndex = bufferIndex;
     co_await m_ios.submit(request);
 
@@ -92,8 +92,8 @@ coro::task<> Storage::makeMultiTextureTask(coro::latch& latch, BindlessTablePtr 
 {
     std::vector<uint32_t> stagings;
 
-    constexpr uint32_t capacity = kStagingSize;
-    uint32_t offset = capacity;
+    constexpr uint64_t capacity = kStagingSize;
+    uint64_t offset = capacity;
     int bufferId;
 
     std::vector<sys::IoService::FileLoadRequest> requests(files.size());
@@ -106,7 +106,7 @@ coro::task<> Storage::makeMultiTextureTask(coro::latch& latch, BindlessTablePtr 
         if (offset + byteSizes > capacity)
         {
             offset = 0;
-            bufferId = acquireStaging();
+            bufferId = co_await acquireStaging();
             stagings.emplace_back(bufferId);
         }
 
@@ -322,7 +322,8 @@ coro::task<> makeMultiTextureTaskDeprecated(coro::latch& latch, TexturePoolPtr t
 coro::task<> Storage::makeBufferTask(coro::latch& latch, ReadOnlyFilePtr file, BufferPtr buffer, uint64_t fileLength,
                                      uint64_t fileOffset)
 {
-    const int bufferId = acquireStaging();
+    assert(fileLength < kStagingSize);
+    const int bufferId = co_await acquireStaging();
     const BufferPtr staging = getStaging(bufferId);
 
     sys::IoService::FileLoadRequest request;
