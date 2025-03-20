@@ -6,58 +6,42 @@
 
 namespace ler::render
 {
-void MeshBuffers::allocate(const rhi::DevicePtr& device, const flatbuffers::Vector<const scene::Buffer*>& bufferEntries)
+void MeshBuffers::allocate(const rhi::DevicePtr& device, uint64_t indexSize, uint64_t vertexSize)
 {
-    rhi::StoragePtr storage = device->getStorage();
-    m_latch = std::make_shared<coro::latch>(bufferEntries.size());
-    m_file = storage->openFile(sys::ASSETS_DIR / "scene.bin");
-    for (const scene::Buffer* bufferEntry : bufferEntries)
-    {
-        rhi::BufferDesc desc;
-        rhi::BufferPtr buffer;
-        desc.sizeInBytes = bufferEntry->byte_length();
-        switch (bufferEntry->type())
-        {
-        case scene::BufferType_Index:
-            desc.isIndexBuffer = true;
-            desc.debugName = "IndexBuffer";
-            m_indexBuffer = device->createBuffer(desc);
-            buffer = m_indexBuffer;
-            break;
-        case scene::BufferType_Position:
-            desc.isVertexBuffer = true;
-            desc.debugName = "PositionBuffer";
-            m_vertexBuffers[0] = device->createBuffer(desc);
-            buffer = m_vertexBuffers[0];
-            break;
-        case scene::BufferType_Normal:
-            desc.isVertexBuffer = true;
-            desc.debugName = "NormalBuffer";
-            m_vertexBuffers[2] = device->createBuffer(desc);
-            buffer = m_vertexBuffers[2];
-            break;
-        case scene::BufferType_Tangent:
-            desc.isVertexBuffer = true;
-            desc.debugName = "TangentBuffer";
-            m_vertexBuffers[3] = device->createBuffer(desc);
-            buffer = m_vertexBuffers[3];
-            break;
-        case scene::BufferType_Texcoord:
-            desc.isVertexBuffer = true;
-            desc.debugName = "TexcoordBuffer";
-            m_vertexBuffers[1] = device->createBuffer(desc);
-            buffer = m_vertexBuffers[1];
-            break;
-        }
+    rhi::BufferDesc desc;
+    desc.isIndexBuffer = true;
+    desc.sizeInBytes = indexSize;
+    desc.debugName = "IndexBuffer";
+    m_indexBuffer = device->createBuffer(desc);
 
-        storage->requestLoadBuffer(*m_latch, m_file, buffer, bufferEntry->byte_length(), bufferEntry->byte_offset());
+    desc.sizeInBytes = vertexSize;
+    desc.isIndexBuffer = false;
+    desc.isVertexBuffer = true;
+    for (int i = 0; i < m_vertexBuffers.size(); ++i)
+    {
+        desc.debugName = kNames[i];
+        m_vertexBuffers[i] = device->createBuffer(desc);
     }
-    coro::sync_wait(*m_latch);
 }
 
-void MeshBuffers::allocate(const rhi::DevicePtr& device, rhi::BindlessTablePtr& table, const flatbuffers::Vector<const scene::Material*>& materialEntries)
+static glm::vec3 toVec3(const pak::Vec3& vec)
 {
-    rhi::StoragePtr storage = device->getStorage();
+    return { vec.x(), vec.y(), vec.z() };
+}
+
+void MeshBuffers::updateMeshes(const flatbuffers::Vector<const pak::Mesh*>& meshEntries)
+{
+    meshCount.fetch_add(meshEntries.size());
+    for (uint32_t i = 0; i < meshEntries.size(); ++i)
+    {
+        const pak::Mesh* entry = meshEntries[i];
+        meshes[i].countIndex = entry->count_index();
+        meshes[i].firstIndex = entry->first_index();
+        meshes[i].countVertex = entry->count_vertex();
+        meshes[i].firstVertex = entry->first_vertex();
+        meshes[i].bbMin = toVec3(entry->bbmin());
+        meshes[i].bbMax = toVec3(entry->bbmax());
+    }
 
     m_drawMeshes.resize(getMeshCount());
     for (size_t i = 0; i < m_drawMeshes.size(); ++i)
@@ -73,26 +57,41 @@ void MeshBuffers::allocate(const rhi::DevicePtr& device, rhi::BindlessTablePtr& 
         drawMesh.bbMin = glm::vec4(mesh.bbMin, 1.f);
         drawMesh.bbMax = glm::vec4(mesh.bbMax, 1.f);
     }
+}
 
+void MeshBuffers::updateMaterials(const rhi::StoragePtr& storage, const flatbuffers::Vector<const pak::Material*>& materialEntries)
+{
     m_drawSkins.resize(materialEntries.size());
     for (uint32_t i = 0; i < m_drawSkins.size(); ++i)
     {
-        const scene::Material* material = materialEntries[i];
+        const pak::Material* material = materialEntries[i];
         DrawSkin& skin = m_drawSkins[i];
+        skin.alphaMode = material->alpha_mode();
+        skin.alphaCutOff = material->alpha_cut_off();
+        pak::Vec3 b = material->base_color();
+        skin.baseColor = glm::vec3(b.x(), b.y(), b.z());
 
-        skin.textures = glm::uvec4(i, 0.f, 0.f, 0.f);
-        //log::info(material->diffuse()->c_str());
-        //const fs::path path = sys::FileSystemService::Get().resolve(sys::FsTag_Textures, material->diffuse()->string_view());
-        //m_files.emplace_back(storage->openFile(path));
+        skin.textures = glm::uvec4(0.f);
+        for(int t = 0; t < 4; ++t)
+        {
+            uint64_t hash = material->texture()->Get(t);
+            std::expected<rhi::ResourceViewPtr, rhi::StorageError> res = storage->getResource(hash);
+            if(res.has_value())
+                skin.textures[t] = res.value()->getBindlessIndex();
+        }
     }
+}
 
+void MeshBuffers::flushBuffer(const rhi::DevicePtr& device)
+{
     rhi::BufferDesc meshDesc;
-    meshDesc.debugName = "meshBuffer";
+    meshDesc.debugName = "MeshBuffer";
     meshDesc.stride = sizeof(DrawMesh);
     meshDesc.sizeInBytes = sizeof(DrawMesh) * m_drawMeshes.size();
     m_meshBuffer = device->createBuffer(meshDesc);
 
     rhi::BufferDesc skinDesc;
+    skinDesc.debugName = "SkinBuffer";
     skinDesc.stride = sizeof(DrawSkin);
     skinDesc.sizeInBytes = sizeof(DrawSkin) * m_drawSkins.size();
     m_skinBuffer = device->createBuffer(skinDesc);
@@ -109,28 +108,6 @@ void MeshBuffers::allocate(const rhi::DevicePtr& device, rhi::BindlessTablePtr& 
     staging->uploadFromMemory(m_drawSkins.data(), skinDesc.sizeInBytes);
     command->copyBuffer(staging, m_skinBuffer, skinDesc.sizeInBytes, 0);
     device->submitOneShot(command);
-
-    //storage->requestLoadTexture(*m_latch, texturePool, m_files);
-}
-
-static glm::vec3 toVec3(const scene::Vec3& vec)
-{
-    return {vec.x(), vec.y(), vec.z()};
-}
-
-void MeshBuffers::load(const flatbuffers::Vector<const scene::Mesh*>& meshEntries)
-{
-    meshCount.fetch_add(meshEntries.size());
-    for (uint32_t i = 0; i < meshEntries.size(); ++i)
-    {
-        const scene::Mesh* entry = meshEntries[i];
-        meshes[i].countIndex = entry->count_index();
-        meshes[i].firstIndex = entry->first_index();
-        meshes[i].countVertex = entry->count_vertex();
-        meshes[i].firstVertex = entry->first_vertex();
-        meshes[i].bbMin = toVec3(entry->bbmin());
-        meshes[i].bbMax = toVec3(entry->bbmax());
-    }
 }
 
 void MeshBuffers::bind(const rhi::CommandPtr& cmd, bool prePass) const
@@ -172,10 +149,5 @@ uint32_t MeshBuffers::getMeshCount() const
 const IndexedMesh& MeshBuffers::getMesh(uint32_t id) const
 {
     return meshes[id];
-}
-
-bool MeshBuffers::isLoaded() const
-{
-    return m_latch->is_ready();
 }
 } // namespace ler::render

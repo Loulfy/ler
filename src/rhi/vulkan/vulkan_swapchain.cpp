@@ -177,6 +177,9 @@ Format SwapChain::format() const
 
 uint32_t SwapChain::present(const RenderPass& renderPass)
 {
+    // Notify Frame Start
+    device->beginFrame(currentFrame);
+
     // Wait busy command
     vk::Result result = m_context.device.waitForFences(1, &m_fences[currentFrame].get(), VK_TRUE, UINT64_MAX);
     assert(result == vk::Result::eSuccess);

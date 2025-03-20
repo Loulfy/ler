@@ -7,19 +7,19 @@
 namespace ler::render
 {
 void RenderMeshList::installStaticScene(const rhi::DevicePtr& device,
-                                        const flatbuffers::Vector<const scene::Instance*>& instanceEntries)
+                                        const flatbuffers::Vector<const pak::Instance*>& instanceEntries)
 {
     m_drawInstances.reserve(instanceEntries.size());
-    for (const auto inst : instanceEntries)
+    for (const pak::Instance* inst : instanceEntries)
     {
-        auto& drawInst = m_drawInstances.emplace_back();
+        DrawInstance& drawInst = m_drawInstances.emplace_back();
         drawInst.model = glm::make_mat4(inst->transform()->data());
         drawInst.skinIndex = inst->skin_id();
         drawInst.meshIndex = inst->mesh_id();
     }
 
     rhi::BufferDesc bufDesc;
-    bufDesc.debugName = "instanceBuffer";
+    bufDesc.debugName = "InstanceBuffer";
     bufDesc.stride = sizeof(DrawInstance);
     bufDesc.sizeInBytes = sizeof(DrawInstance) * m_drawInstances.size();
     m_instanceBuffer = device->createBuffer(bufDesc);
@@ -34,6 +34,16 @@ void RenderMeshList::installStaticScene(const rhi::DevicePtr& device,
 const rhi::BufferPtr& RenderMeshList::getInstanceBuffer() const
 {
     return m_instanceBuffer;
+}
+
+const rhi::BufferPtr& RenderMeshList::getMeshBuffer() const
+{
+    return m_meshes->getMeshBuffer();
+}
+
+const rhi::BufferPtr& RenderMeshList::getSkinBuffer() const
+{
+    return m_meshes->getSkinBuffer();
 }
 
 const DrawInstance& RenderMeshList::getInstance(uint32_t id) const
@@ -54,5 +64,10 @@ uint32_t RenderMeshList::getInstanceCount() const
 void RenderMeshList::bindVertices(rhi::CommandPtr& cmd)
 {
     m_meshes->bind(cmd, false);
+}
+
+void RenderMeshList::bindEncoder(rhi::EncodeIndirectIndexedDrawDesc& drawDesc, bool prePass) const
+{
+    m_meshes->bind(drawDesc, prePass);
 }
 } // namespace ler::render

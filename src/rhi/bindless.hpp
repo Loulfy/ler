@@ -31,6 +31,7 @@ class CommonBindlessTable : public IBindlessTable
   private:
     bool setResource(const ResourcePtr& res, uint32_t slot);
 
+    IDevice* m_device = nullptr;
     std::array<ResourcePtr, kBindlessMax> m_resources;
     std::array<SamplerPtr, 16> m_samplers;
     std::mutex m_mutex;

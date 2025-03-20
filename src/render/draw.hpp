@@ -12,6 +12,9 @@ struct alignas(16) DrawConstant
 {
     glm::mat4 proj = glm::mat4(1.f);
     glm::mat4 view = glm::mat4(1.f);
+    glm::uint drawIndex = 0;
+    glm::uint instIndex = 0;
+    glm::uint matIndex = 0;
 };
 
 struct alignas(16) Frustum
@@ -35,6 +38,9 @@ struct alignas(16) DrawSkin
 {
     // x = diffuse index, y = roughness index, z = normal index, w = occlusion index.
     glm::uvec4 textures = glm::uvec4(0.f);
+    glm::uint alphaMode = 0;
+    glm::vec3 baseColor = glm::vec3(1.f);
+    float alphaCutOff = 0.5f;
 };
 
 struct alignas(16) DrawInstance

@@ -144,7 +144,7 @@ struct DdsTexture : public ITexture
     uint32_t ddsMagic = 0u;
     FileHeader header;
     Dx10Header additionalHeader;
-    std::array<LevelIndexEntry, 12> levelIndex;
+    std::array<LevelIndexEntry, 15> levelIndex;
     rhi::FormatBlockInfo formatSize;
     int32_t format = 0;
 

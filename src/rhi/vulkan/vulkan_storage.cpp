@@ -14,7 +14,7 @@ Storage::Storage(Device* device, std::shared_ptr<coro::thread_pool>& tp) : Commo
     {
         const auto* buff = checked_cast<Buffer*>(staging.get());
         auto* data = static_cast<std::byte*>(buff->hostInfo.pMappedData);
-        buffers.emplace_back(data, kStagingSize);
+        buffers.emplace_back(data, static_cast<uint32_t>(kStagingSize));
     }
     m_ios.registerBuffers(buffers, context.hostBuffer);
 }
@@ -87,6 +87,20 @@ coro::task<> Storage::makeSingleTextureTask(coro::latch& latch, BindlessTablePtr
     co_return;
 }
 
+size_t computeDDSPadding(size_t headerSize = 148, size_t existingOffset = 0, size_t alignment = 16)
+{
+    // Calculate the total offset (header + existing offset)
+    size_t totalSize = headerSize + existingOffset;
+
+    // Calculate the remainder when totalSize is divided by alignment
+    size_t remainder = totalSize % alignment;
+
+    // Calculate padding needed to make totalSize aligned to the next multiple of alignment
+    size_t padding = (alignment - remainder) % alignment;
+
+    return padding;
+}
+
 coro::task<> Storage::makeMultiTextureTask(coro::latch& latch, BindlessTablePtr table,
                                            std::vector<ReadOnlyFilePtr> files)
 {
@@ -101,7 +115,7 @@ coro::task<> Storage::makeMultiTextureTask(coro::latch& latch, BindlessTablePtr 
     {
         queueTexture(files[i], requests[i]);
         static constexpr uint64_t alignment = 16;
-        const uint64_t byteSizes = align(files[i]->sizeInBytes(), alignment);
+        const uint64_t byteSizes = files[i]->sizeInBytes();
 
         if (offset + byteSizes > capacity)
         {
@@ -110,6 +124,7 @@ coro::task<> Storage::makeMultiTextureTask(coro::latch& latch, BindlessTablePtr 
             stagings.emplace_back(bufferId);
         }
 
+        offset += computeDDSPadding(128, offset);
         requests[i].buffOffset = offset;
         requests[i].buffIndex = bufferId;
         requests[i].fileLength = files[i]->sizeInBytes();
@@ -120,6 +135,8 @@ coro::task<> Storage::makeMultiTextureTask(coro::latch& latch, BindlessTablePtr 
     co_await m_ios.submit(requests);
 
     CommandPtr cmd = m_device->createCommand(QueueType::Transfer);
+    std::vector<TextureStreaming> result;
+    result.reserve(files.size());
 
     {
         std::lock_guard lock = table->lock();
@@ -135,8 +152,8 @@ coro::task<> Storage::makeMultiTextureTask(coro::latch& latch, BindlessTablePtr 
 
             // uint32_t texIndex = table->allocate();
             TexturePtr texture = m_device->createTexture(desc);
-            ResourceViewPtr view = table->createResourceView(texture);
-            log::info("Load texture {:03}: {}", view->getBindlessIndex(), desc.debugName);
+            result.emplace_back(table->createResourceView(texture), desc.debugName);
+            log::info("Load texture {:03}: {}", result.back().view->getBindlessIndex(), desc.debugName);
             // table->setResource(texture, texIndex);
 
             for (const uint32_t mip : std::views::iota(0u, levels.size()))
@@ -155,10 +172,112 @@ coro::task<> Storage::makeMultiTextureTask(coro::latch& latch, BindlessTablePtr 
     }
 
     m_device->submitOneShot(cmd);
+    m_dispatcher.enqueue(result);
 
     latch.count_down();
     for (const uint32_t buffId : stagings)
         releaseStaging(buffId);
+
+    co_return;
+}
+
+static constexpr size_t computePitch(Format fmt, size_t width, size_t height)
+{
+    uint64_t pitch = 0;
+    switch (fmt)
+    {
+    case Format::BC1_UNORM:
+    case Format::BC4_UNORM:
+    case Format::BC4_SNORM: {
+        const uint64_t nbw = std::max<uint64_t>(1u, (uint64_t(width) + 3u) / 4u);
+        const uint64_t nbh = std::max<uint64_t>(1u, (uint64_t(height) + 3u) / 4u);
+        pitch = nbw * 8u;
+    }
+    break;
+    case Format::BC2_UNORM:
+    case Format::BC3_UNORM:
+    case Format::BC5_UNORM:
+    case Format::BC5_SNORM:
+    case Format::BC6H_UFLOAT:
+    case Format::BC6H_SFLOAT:
+    case Format::BC7_UNORM: {
+        const uint64_t nbw = std::max<uint64_t>(1u, (uint64_t(width) + 3u) / 4u);
+        const uint64_t nbh = std::max<uint64_t>(1u, (uint64_t(height) + 3u) / 4u);
+        pitch = nbw * 16u;
+    }
+    break;
+    default:
+        break;
+    }
+
+    return static_cast<size_t>(pitch);
+}
+
+coro::task<> Storage::makeMultiTextureTask(coro::latch& latch, BindlessTablePtr table,
+                                           std::vector<TextureStreamingMetadata> textures)
+{
+    std::vector<TextureStreaming> result;
+    result.reserve(textures.size());
+
+    std::vector<sys::IoService::FileLoadRequest> requests(textures.size());
+
+    uint64_t offset = 0;
+    uint64_t offsetSubresource = 0;
+    int bufferId = co_await acquireStaging();
+    CommandPtr cmd = m_device->createCommand(QueueType::Transfer);
+
+    {
+        std::lock_guard lock = table->lock();
+        for (size_t i = 0; i < textures.size(); ++i)
+        {
+            const TextureStreamingMetadata& metadata = textures[i];
+            const TextureDesc& desc = metadata.desc;
+            TexturePtr texture = m_device->createTexture(desc);
+            result.emplace_back(table->createResourceView(texture), metadata.desc.debugName);
+            log::info("Load texture {:03}: {}", result.back().view->getBindlessIndex(), desc.debugName);
+
+            queueTexture(metadata.file, requests[i]);
+
+            requests[i].buffOffset = offset;
+            requests[i].buffIndex = bufferId;
+            requests[i].fileLength = metadata.byteLength;
+            requests[i].fileOffset = metadata.byteOffset;
+
+            offsetSubresource = offset;
+
+            for (const uint32_t mip : std::views::iota(0u, metadata.desc.mipLevels))
+            {
+                Subresource sub;
+                sub.index = mip;
+                sub.offset = offsetSubresource;
+                sub.width = desc.width >> mip;
+                sub.height = desc.height >> mip;
+                uint64_t rowPitch = computePitch(desc.format, sub.width, sub.height);
+                sub.rowPitch = rowPitch;
+                sub.rowPitch = align(sub.rowPitch, 256u);
+                const FormatBlockInfo info = formatToBlockInfo(desc.format);
+                sub.rowPitch /= info.blockSizeByte;
+                sub.rowPitch *= info.blockWidth;
+                cmd->copyBufferToTexture(getStaging(bufferId), texture, sub, nullptr);
+
+                size_t height = std::max<size_t>(1, (sub.height + 3) / 4);
+                size_t subResourceSize = align(rowPitch, 256ull) * height;
+                subResourceSize = align(subResourceSize, 512ull);
+                offsetSubresource += subResourceSize;
+            }
+
+            offset += metadata.byteLength;
+        }
+    }
+
+    co_await m_ios.submit(requests);
+
+    m_device->submitOneShot(cmd);
+    auto resCountDown = static_cast<int64_t>(result.size());
+    m_dispatcher.enqueue(result);
+
+    latch.count_down(resCountDown);
+    releaseStaging(bufferId);
 
     co_return;
 }
@@ -322,25 +441,38 @@ coro::task<> makeMultiTextureTaskDeprecated(coro::latch& latch, TexturePoolPtr t
 coro::task<> Storage::makeBufferTask(coro::latch& latch, ReadOnlyFilePtr file, BufferPtr buffer, uint64_t fileLength,
                                      uint64_t fileOffset)
 {
-    assert(fileLength < kStagingSize);
-    const int bufferId = co_await acquireStaging();
-    const BufferPtr staging = getStaging(bufferId);
+    std::vector<uint32_t> stagings;
+    uint64_t offset = 0;
+    uint64_t remains = fileLength;
 
-    sys::IoService::FileLoadRequest request;
-    request.file = &checked_cast<ReadOnlyFile*>(file.get())->handle;
-    request.fileLength = fileLength;
-    request.fileOffset = fileOffset;
-    request.buffIndex = bufferId;
-
+    std::vector<sys::IoService::FileLoadRequest> requests;
     CommandPtr cmd = m_device->createCommand(QueueType::Transfer);
-    cmd->copyBuffer(staging, buffer, fileLength, 0);
 
-    co_await m_ios.submit(request);
+    while (offset < fileLength)
+    {
+        int bufferId = co_await acquireStaging();
+        stagings.emplace_back(bufferId);
+
+        sys::IoService::FileLoadRequest request;
+        request.file = &checked_cast<ReadOnlyFile*>(file.get())->handle;
+        request.fileLength = std::min(remains, kStagingSize);
+        request.fileOffset = fileOffset + offset;
+        request.buffIndex = bufferId;
+        requests.push_back(request);
+
+        cmd->copyBuffer(getStaging(bufferId), buffer, request.fileLength, offset);
+
+        offset += kStagingSize;
+        remains -= kStagingSize;
+    }
+
+    co_await m_ios.submit(requests);
 
     m_device->submitOneShot(cmd);
 
     latch.count_down();
-    releaseStaging(bufferId);
+    for (const uint32_t buffId : stagings)
+        releaseStaging(buffId);
 
     co_return;
 }

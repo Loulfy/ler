@@ -5,6 +5,7 @@
 #include "pass/forward_indexed.hpp"
 #include "pass/deferred_scene.hpp"
 #include "render/pass.hpp"
+#include "render/resource_mgr.hpp"
 
 using namespace ler;
 
@@ -18,11 +19,13 @@ class TestLoadOneTex final : public rhi::IRenderPass
     rhi::Latch latch;
     uint32_t texId = 0;
 
-    static constexpr uint32_t kTexCount = 256;
+    rhi::BufferPtr constant;
+
+    static constexpr uint32_t kTexCount = 612;
 
     [[nodiscard]] bool startup() const override
     {
-        return latch->is_ready();
+        return true;
     }
 
     void create(const rhi::DevicePtr& device, const rhi::SwapChainPtr& swapChain) override
@@ -38,6 +41,11 @@ class TestLoadOneTex final : public rhi::IRenderPass
         pipeline = device->createGraphicsPipeline(modules, pso);
         //pipeline = device->loadPipeline("quad", modules, pso);
 
+        rhi::BufferDesc cbvDesc;
+        cbvDesc.isConstantBuffer = true;
+        cbvDesc.sizeInBytes = 256;
+        constant = device->createBuffer(cbvDesc);
+
         rhi::SamplerDesc sd;
         sd.filter = false;
         sd.addressU = rhi::SamplerAddressMode::Repeat;
@@ -49,7 +57,6 @@ class TestLoadOneTex final : public rhi::IRenderPass
         table = device->createBindlessTable(1024);
         table->setSampler(sampler, 0);
 
-        latch = std::make_shared<coro::latch>(10);
         //rhi::ReadOnlyFilePtr file = storage->openFile(sys::ASSETS_DIR / "grid01.KTX2");
         //rhi::ReadOnlyFilePtr file = storage->openFile(sys::ASSETS_DIR / "Wood_BaseColor.dds");
         //rhi::ReadOnlyFilePtr file = storage->openFile(sys::ASSETS_DIR / "sponza" / "332936164838540657.DDS");
@@ -62,16 +69,20 @@ class TestLoadOneTex final : public rhi::IRenderPass
         //auto files = storage->openFiles(R"(/Users/lcorbel/Downloads/Bistro_v5_2/Textures)", ".dds");
         //storage->requestLoadTexture(*latch, table, std::span(files.data(), kTexCount));
 
-        std::vector<fs::path> paths;
+        /*std::vector<fs::path> paths;
         paths.reserve(512);
         for (const fs::directory_entry& entry : fs::directory_iterator(R"(C:\Users\loria\Downloads\Bistro_v5_2\Bistro_v5_2\Textures)"))
         {
             if (entry.is_regular_file() && entry.path().extension() == ".dds")
                 paths.emplace_back(entry.path());
         }
-        storage->requestOpenTexture(*latch, table, paths);
+        latch = storage->requestOpenTexture(table, paths);
 
-        async::sync_wait(*latch);
+        async::sync_wait(*latch);*/
+
+        render::ResourceManager mgr;
+        mgr.setup(storage, table);
+        mgr.openArchive(device, sys::ASSETS_DIR / "fat.pak");
     }
 
     void render(rhi::TexturePtr& backBuffer, rhi::CommandPtr& command) override
@@ -88,9 +99,12 @@ class TestLoadOneTex final : public rhi::IRenderPass
         pass.colors[0].texture = backBuffer;
         pass.colorCount = 1;
 
+        command->syncBuffer(constant, &texId, sizeof(uint32_t));
+        command->addBufferBarrier(constant, rhi::ConstantBuffer);
+
         command->beginRendering(pass);
-        command->bindPipeline(pipeline, table);
-        command->pushConstant(pipeline, rhi::ShaderType::Pixel, 0, &texId, sizeof(uint32_t));
+        command->bindPipeline(pipeline, table, constant);
+        //command->pushConstant(pipeline, rhi::ShaderType::Pixel, 0, &texId, sizeof(uint32_t));
         command->drawPrimitives(4);
         command->endRendering();
 
@@ -105,27 +119,11 @@ class TestForward final : public rhi::IRenderPass, public render::IMeshRenderer
 {
   public:
     rhi::PipelinePtr pipeline;
-    rhi::SamplerPtr sampler;
-    rhi::BindlessTablePtr table;
     rhi::TexturePtr depth;
-    render::MeshBuffers meshBuffers;
-    render::RenderMeshList meshList;
 
     void create(const rhi::DevicePtr& device, const rhi::SwapChainPtr& swapChain) override
     {
-        const std::vector<char> blob = sys::readBlobFile(sys::ASSETS_DIR / "scene.mesh");
-
-        flatbuffers::Verifier v(reinterpret_cast<const uint8_t* const>(blob.data()), blob.size());
-        assert(scene::VerifySceneBuffer(v));
-        auto scene = scene::GetScene(blob.data());
-
-        meshBuffers.allocate(device, *scene->buffers());
-        meshBuffers.load(*scene->meshes());
-        meshList.installStaticScene(device, *scene->instances());
-        meshList.setMeshBuffers(&meshBuffers);
-
-        table = device->createBindlessTable(128);
-        rhi::ResourceViewPtr vi = table->createResourceView(meshList.getInstanceBuffer());
+        //rhi::ResourceViewPtr vi = table->createResourceView(meshList.getInstanceBuffer());
 
         std::vector<rhi::ShaderModule> modules;
         modules.emplace_back("cached/wireframe.frag", "main", rhi::ShaderType::Pixel);
@@ -153,20 +151,13 @@ class TestForward final : public rhi::IRenderPass, public render::IMeshRenderer
         auto storage = device->getStorage();
         rhi::Latch latch = std::make_shared<coro::latch>(1);
         auto files = storage->openFiles(sys::ASSETS_DIR, ".dds");
-        storage->requestLoadTexture(*latch, table, std::span(files.data(), 1));
+        //storage->requestLoadTexture(*latch, table, std::span(files.data(), 1));
         async::sync_wait(*latch);
-
-        rhi::SamplerDesc sd;
-        sd.filter = false;
-        //sd.addressU = rhi::SamplerAddressMode::Repeat;
-        //sd.addressV = rhi::SamplerAddressMode::Repeat;
-        //sd.addressW = rhi::SamplerAddressMode::Repeat;
-        //sampler = device->createSampler(sd);
-        //table->setSampler(sampler, 0);
     }
 
     void render(rhi::TexturePtr& backBuffer, rhi::CommandPtr& command, const render::RenderParams& params) override
     {
+        render::RenderMeshList* meshList = params.meshList;
         ImGui::Begin("Hello MoltenVK", nullptr, ImGuiWindowFlags_NoResize);
         ImGui::Text("Application average %.3f ms/frame (%.1f FPS)", 1000.0f / ImGui::GetIO().Framerate, ImGui::GetIO().Framerate);
         ImGui::End();
@@ -191,13 +182,13 @@ class TestForward final : public rhi::IRenderPass, public render::IMeshRenderer
         data.view = params.view;
 
         command->beginRendering(pass);
-        command->bindPipeline(pipeline, table);
+        command->bindPipeline(pipeline, params.table, nullptr);
         command->pushConstant(pipeline, rhi::ShaderType::Vertex, 0, &data, sizeof(test));
-        meshBuffers.bind(command, false);
-        for(uint32_t i = 0; i < meshList.getInstanceCount(); ++i)
+        meshList->bindVertices(command);
+        for(uint32_t i = 0; i < meshList->getInstanceCount(); ++i)
         {
-            const render::DrawInstance& draw = meshList.getInstance(i);
-            const render::IndexedMesh& mesh = meshList.getMesh(draw.meshIndex);
+            const render::DrawInstance& draw = meshList->getInstance(i);
+            const render::IndexedMesh& mesh = meshList->getMesh(draw.meshIndex);
             command->drawIndexedPrimitives(mesh.countIndex, mesh.firstIndex, mesh.firstVertex, i);
         }
         //command->drawIndirectIndexed(pipeline, drawsBuffer, countBuffer, meshList.getInstanceCount(), sizeof(render::DrawCommand));
@@ -220,10 +211,7 @@ class TestIndirect final : public rhi::IRenderPass, public render::IMeshRenderer
   public:
     rhi::PipelinePtr pipeline;
     rhi::SamplerPtr sampler;
-    rhi::BindlessTablePtr table;
     rhi::TexturePtr depth;
-    render::MeshBuffers meshBuffers;
-    render::RenderMeshList meshList;
 
     struct CullIndex
     {
@@ -242,29 +230,15 @@ class TestIndirect final : public rhi::IRenderPass, public render::IMeshRenderer
     rhi::BufferPtr clearer;
     rhi::BufferPtr readback;
     //CullIndex cullRes;
-    uint32_t cullRes[5] = {};
-    std::array<rhi::ResourceViewPtr,5> cullViews;
+    uint32_t cullRes[6] = {};
+    std::array<rhi::ResourceViewPtr,6> cullViews;
 
     rhi::BufferPtr drawConstant;
     rhi::BufferPtr cullConstant;
 
+
     void create(const rhi::DevicePtr& device, const rhi::SwapChainPtr& swapChain) override
     {
-        const std::vector<char> blob = sys::readBlobFile(sys::ASSETS_DIR / "scene.mesh");
-
-        flatbuffers::Verifier v(reinterpret_cast<const uint8_t* const>(blob.data()), blob.size());
-        assert(scene::VerifySceneBuffer(v));
-        auto scene = scene::GetScene(blob.data());
-
-        meshBuffers.allocate(device, *scene->buffers());
-        meshBuffers.load(*scene->meshes());
-        meshBuffers.allocate(device, table, *scene->materials());
-        meshList.installStaticScene(device, *scene->instances());
-        meshList.setMeshBuffers(&meshBuffers);
-
-        table = device->createBindlessTable(2048);
-        //table->setResource(meshList.getInstanceBuffer(), 0);
-
         rhi::ShaderModule module("cached/cullmesh.comp", "CSMain", rhi::ShaderType::Compute);
         cullPass = device->createComputePipeline(module);
 
@@ -274,7 +248,7 @@ class TestIndirect final : public rhi::IRenderPass, public render::IMeshRenderer
         rhi::PipelineDesc pso;
         pso.writeDepth = true;
         pso.textureCount = 0;
-        pso.fillMode = rhi::RasterFillMode::Wireframe;
+        pso.fillMode = rhi::RasterFillMode::Solid;
         pso.topology = rhi::PrimitiveType::TriangleList;
         pso.colorAttach.emplace_back(swapChain->format());
         pso.depthAttach = rhi::Format::D32;
@@ -328,9 +302,75 @@ class TestIndirect final : public rhi::IRenderPass, public render::IMeshRenderer
         }
     }
 
+    static constexpr std::array<uint32_t,4> kPattern = {0, 0, 1, 1};
+    static constexpr std::span<const uint32_t> kClearer = kPattern;
+
     void render(rhi::TexturePtr& backBuffer, rhi::CommandPtr& command, const render::RenderParams& params) override
     {
+        render::RenderMeshList* meshList = params.meshList;
+
         command->addBufferBarrier(countBuffer, rhi::CopySrc);
+        command->copyBuffer(countBuffer, readback, 16, 0);
+        command->syncBuffer(countBuffer, kClearer.data(), kClearer.size_bytes());
+
+        uint32_t num;
+        readback->getUint(&num);
+        ImGui::Begin("Hello LER", nullptr, ImGuiWindowFlags_NoResize);
+        ImGui::Text("Culled Instance: %d", num);
+        ImGui::Text("Application average %.3f ms/frame (%.1f FPS)", 1000.0f / ImGui::GetIO().Framerate, ImGui::GetIO().Framerate);
+        ImGui::End();
+
+        render::Frustum f;
+        getFrustumCorners(params.proj * params.view, f.corners);
+        getFrustumPlanes(params.proj * params.view, f.planes);
+        f.num = meshList->getInstanceCount();
+        command->syncBuffer(frustBuffer, &f, sizeof(render::Frustum));
+
+        command->bindPipeline(cullPass, params.table, cullConstant);
+        command->syncBuffer(cullConstant, &cullRes, sizeof(CullIndex));
+
+        command->addBufferBarrier(meshList->getInstanceBuffer(), rhi::ShaderResource);
+        command->addBufferBarrier(meshList->getMeshBuffer(), rhi::ShaderResource);
+        command->addBufferBarrier(frustBuffer, rhi::ConstantBuffer);
+        command->addBufferBarrier(countBuffer, rhi::UnorderedAccess);
+        command->addBufferBarrier(drawsBuffer, rhi::UnorderedAccess);
+        command->dispatch(1 + meshList->getInstanceCount() / 32, 1, 1);
+
+        rhi::RenderingInfo pass;
+        pass.viewport = backBuffer->extent();
+        pass.colors[0].loadOp = rhi::AttachmentLoadOp::Clear;
+        pass.colors[0].texture = backBuffer;
+        pass.depth.loadOp = rhi::AttachmentLoadOp::Clear;
+        pass.depth.texture = depth;
+        pass.colorCount = 1;
+
+        render::DrawConstant data;
+        data.proj = params.proj;
+        data.view = params.view;
+        data.drawIndex = cullRes[0];
+        data.instIndex = cullRes[2];
+        data.matIndex = cullRes[5];
+        command->syncBuffer(drawConstant, &data, sizeof(render::DrawConstant));
+
+        rhi::EncodeIndirectIndexedDrawDesc encoder;
+        meshList->bindEncoder(encoder, true);
+        encoder.maxDrawCount = meshList->getInstanceCount();
+        encoder.constantBuffer = drawConstant;
+        encoder.drawsBuffer = drawsBuffer;
+        encoder.countBuffer = countBuffer;
+        encoder.table = params.table;
+        command->encodeIndirectIndexedPrimitives(encoder);
+
+        command->addBufferBarrier(countBuffer, rhi::Indirect);
+        command->addBufferBarrier(drawsBuffer, rhi::Indirect);
+
+        command->beginRendering(pass);
+        command->bindPipeline(pipeline, params.table, drawConstant);
+        meshList->bindVertices(command);
+        command->drawIndirectIndexedPrimitives(pipeline, drawsBuffer, countBuffer, meshList->getInstanceCount(), sizeof(render::DrawCommand));
+        command->endRendering();
+
+        /*command->addBufferBarrier(countBuffer, rhi::CopySrc);
         command->copyBuffer(countBuffer, readback, 16, 0);
         command->addBufferBarrier(countBuffer, rhi::CopyDest);
         command->copyBuffer(clearer, countBuffer, 16, 0);
@@ -381,6 +421,9 @@ class TestIndirect final : public rhi::IRenderPass, public render::IMeshRenderer
         render::DrawConstant data;
         data.proj = params.proj;
         data.view = params.view;
+        data.drawIndex = cullRes[0];
+        data.instIndex = cullRes[2];
+        data.matIndex = cullRes[5];
         //command->syncBuffer(drawConstant, &data, sizeof(render::DrawConstant));
         drawConstant->uploadFromMemory(&data, sizeof(render::DrawConstant));
 
@@ -397,7 +440,7 @@ class TestIndirect final : public rhi::IRenderPass, public render::IMeshRenderer
         command->bindPipeline(pipeline, table);
         //command->setConstant(drawConstant, rhi::ShaderType::Vertex);
         command->pushConstant(pipeline, rhi::ShaderType::Vertex, 0, &data, sizeof(render::DrawConstant));
-        meshBuffers.bind(command, true);
+        meshBuffers.bind(command, false);*/
 
         /*for(uint32_t i = 0; i < meshList.getInstanceCount(); ++i)
         {
@@ -407,8 +450,8 @@ class TestIndirect final : public rhi::IRenderPass, public render::IMeshRenderer
             const render::IndexedMesh& mesh = meshList.getMesh(draw.meshIndex);
             command->drawIndexedInstanced(mesh.countIndex, mesh.firstIndex, mesh.firstVertex, i);
         }*/
-        command->drawIndirectIndexedPrimitives(pipeline, drawsBuffer, countBuffer, meshList.getInstanceCount(), sizeof(render::DrawCommand));
-        command->endRendering();
+        /*command->drawIndirectIndexedPrimitives(pipeline, drawsBuffer, countBuffer, meshList.getInstanceCount(), sizeof(render::DrawCommand));
+        command->endRendering();*/
     }
 
     void render(rhi::TexturePtr& backBuffer, rhi::CommandPtr& command) override
@@ -419,6 +462,7 @@ class TestIndirect final : public rhi::IRenderPass, public render::IMeshRenderer
     void create(const rhi::DevicePtr& device, const rhi::SwapChainPtr& swapChain,
                 const render::RenderParams& params) override
     {
+        render::RenderMeshList* meshList = params.meshList;
         rhi::BufferDesc buffDesc;
 
         //buffDesc.isConstantBuffer = true;
@@ -452,7 +496,7 @@ class TestIndirect final : public rhi::IRenderPass, public render::IMeshRenderer
         buffDesc.debugName = "drawsBuffer";
         buffDesc.isICB = true;
         buffDesc.stride = sizeof(render::DrawCommand);
-        buffDesc.sizeInBytes = sizeof(render::DrawCommand) * meshList.getInstanceCount();
+        buffDesc.sizeInBytes = sizeof(render::DrawCommand) * meshList->getInstanceCount();
         drawsBuffer = device->createBuffer(buffDesc);
 
         buffDesc.debugName = "countBuffer";
@@ -466,7 +510,8 @@ class TestIndirect final : public rhi::IRenderPass, public render::IMeshRenderer
         buffDesc.debugName = "drawConstant";
         //buffDesc.isManaged = true;
         buffDesc.isUAV = false;
-        buffDesc.isStaging = true;
+        buffDesc.isStaging = false;
+        buffDesc.isConstantBuffer = true;
         buffDesc.stride = sizeof(render::DrawConstant);
         buffDesc.sizeInBytes = sizeof(render::DrawConstant);
         drawConstant = device->createBuffer(buffDesc);
@@ -474,18 +519,13 @@ class TestIndirect final : public rhi::IRenderPass, public render::IMeshRenderer
         buffDesc.debugName = "cullConstant";
         cullConstant = device->createBuffer(buffDesc);
 
-        /*cullRes.propIndex = table->appendResource(meshList.getInstanceBuffer());
-        cullRes.meshIndex = table->appendResource(meshBuffers.getMeshBuffer());
-        cullRes.drawIndex = table->appendResource(drawsBuffer);
-        cullRes.countIndex = table->appendResource(countBuffer);
-        cullRes.frustIndex = table->appendResource(frustBuffer);*/
-
-        cullViews[0] = table->createResourceView(meshList.getInstanceBuffer());
-        cullViews[1] = table->createResourceView(meshBuffers.getMeshBuffer());
-        cullViews[2] = table->createResourceView(drawsBuffer);
-        cullViews[3] = table->createResourceView(countBuffer);
-        cullViews[4] = table->createResourceView(frustBuffer);
-        for(int i = 0; i < 5; ++i)
+        cullViews[0] = params.table->createResourceView(meshList->getInstanceBuffer());
+        cullViews[1] = params.table->createResourceView(meshList->getMeshBuffer());
+        cullViews[2] = params.table->createResourceView(drawsBuffer);
+        cullViews[3] = params.table->createResourceView(countBuffer);
+        cullViews[4] = params.table->createResourceView(frustBuffer);
+        cullViews[5] = params.table->createResourceView(meshList->getSkinBuffer());
+        for(int i = 0; i < 6; ++i)
             cullRes[i] = cullViews[i]->getBindlessIndex();
     }
 };
@@ -503,7 +543,7 @@ int main()
     cfg.api = rhi::GraphicsAPI::VULKAN;
     cfg.vsync = true;
     app::DesktopApp app(cfg);
-    //app.loadScene("scene.mesh");
+    app.loadScene(sys::ASSETS_DIR / "fat.pak");
     //app.addPass<pass::DeferredScene>();
 
     // app.addPass<TestNode>();

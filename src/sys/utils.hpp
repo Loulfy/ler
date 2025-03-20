@@ -23,6 +23,8 @@ namespace fs = std::filesystem;
 #include <nlohmann/json.hpp>
 using json = nlohmann::json;
 
+#include <xxhash.h>
+
 namespace ler
 {
 template <typename T, typename U> T checked_cast(U u)
@@ -89,4 +91,26 @@ private:
     uint32_t m_value = 0xffff;
 };
 
+// Case-insensitive hash function for Windows, case-sensitive for others
+struct PathHash {
+    size_t operator()(const fs::path& path) const {
+        std::string pathStr = path.string();
+
+#ifdef _WIN32
+        //std::transform(pathStr.begin(), pathStr.end(), pathStr.begin(), ::tolower);
+#endif
+        return XXH3_64bits(pathStr.data(), pathStr.size());
+    }
+};
+
+// Case-insensitive comparison for Windows, normal comparison otherwise
+struct PathEqual {
+    bool operator()(const fs::path& a, const fs::path& b) const {
+#ifdef _WIN32
+        return _stricmp(a.string().c_str(), b.string().c_str()) == 0;
+#else
+        return a == b;
+#endif
+    }
+};
 } // namespace ler::sys

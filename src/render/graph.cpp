@@ -493,7 +493,7 @@ void RenderGraph::render(rhi::TexturePtr& backBuffer, rhi::CommandPtr& command, 
         if (node.pass)
         {
             if (node.pass->getPipeline())
-                command->bindPipeline(node.pass->getPipeline(), m_table);
+                command->bindPipeline(node.pass->getPipeline(), m_table, nullptr);
             node.pass->render(command, params, node.resources);
         }
 

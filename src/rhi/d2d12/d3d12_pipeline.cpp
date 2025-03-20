@@ -282,8 +282,11 @@ static bool compareDescriptorRange(const CD3DX12_DESCRIPTOR_RANGE1& a, const CD3
 
 void Pipeline::initRootSignature(bool indirect)
 {
-    std::vector<CD3DX12_ROOT_PARAMETER1> rootParameters;
-    if (m_descriptorHeapIndexing)
+    std::vector<CD3DX12_ROOT_PARAMETER1> rootParameters(2);
+    rootParameters[0].InitAsConstantBufferView(0, 0, D3D12_ROOT_DESCRIPTOR_FLAG_DATA_VOLATILE, D3D12_SHADER_VISIBILITY_ALL);
+    rootParameters[1].InitAsConstants(1, 1, 0, D3D12_SHADER_VISIBILITY_VERTEX);
+
+    /*if (m_descriptorHeapIndexing)
     {
         for (auto& [set, binding] : bindingMap)
         {
@@ -305,7 +308,7 @@ void Pipeline::initRootSignature(bool indirect)
                 rootParam.InitAsDescriptorTable(ranges.size(), ranges.data());
             }
         }
-    }
+    }*/
 
     D3D12_FEATURE_DATA_ROOT_SIGNATURE featureData = {};
 
@@ -353,6 +356,16 @@ void Device::fillGraphicsPsoDesc(const PipelineDesc& desc, const std::span<Shade
                                  D3D12_GRAPHICS_PIPELINE_STATE_DESC& psoDesc)
 {
     psoDesc.RasterizerState = CD3DX12_RASTERIZER_DESC(D3D12_DEFAULT);
+    D3D12_BLEND_DESC& blendDesc = psoDesc.BlendState;
+    blendDesc.RenderTarget[0].BlendEnable = FALSE;
+    blendDesc.RenderTarget[0].SrcBlend = D3D12_BLEND_SRC_ALPHA;
+    blendDesc.RenderTarget[0].DestBlend = D3D12_BLEND_INV_SRC_ALPHA;
+    blendDesc.RenderTarget[0].BlendOp = D3D12_BLEND_OP_ADD;
+    blendDesc.RenderTarget[0].SrcBlendAlpha = D3D12_BLEND_ONE;
+    blendDesc.RenderTarget[0].DestBlendAlpha = D3D12_BLEND_ZERO;
+    blendDesc.RenderTarget[0].BlendOpAlpha = D3D12_BLEND_OP_ADD;
+    blendDesc.RenderTarget[0].RenderTargetWriteMask = D3D12_COLOR_WRITE_ENABLE_ALL;
+
     psoDesc.RasterizerState.CullMode = D3D12_CULL_MODE_NONE;
     psoDesc.RasterizerState.FrontCounterClockwise = true;
     if (desc.fillMode == RasterFillMode::Solid)

@@ -48,6 +48,8 @@ static constexpr std::string d3dFeatureToString(D3D_FEATURE_LEVEL level)
 
 Device::~Device()
 {
+    for(auto& sb : m_context.scratchBufferPool)
+        sb.reset();
     m_storage.reset();
     m_allocator->Release();
 }
@@ -137,6 +139,9 @@ Device::Device(const DeviceConfig& config)
     m_queues[static_cast<int>(QueueType::Transfer)] = std::make_unique<Queue>(m_context, QueueType::Transfer);
 
     m_context.queue = m_queues[static_cast<int>(QueueType::Graphics)]->m_commandQueue.Get();
+
+    for(std::unique_ptr<ScratchBuffer>& scratchBuffer : m_context.scratchBufferPool)
+        scratchBuffer = std::make_unique<ScratchBuffer>(this);
 
     m_threadPool = std::make_shared<coro::thread_pool>(coro::thread_pool::options{ .thread_count = 8 });
 

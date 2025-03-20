@@ -89,7 +89,7 @@ vk::UniqueDescriptorSetLayout BindlessTable::buildBindlessLayout(const VulkanCon
 
     log::debug("BindlessLayout:");
     for (auto& b : bindings)
-        log::debug("set = 0, binding = {}, count = {:02}, type = {}", b.binding, b.descriptorCount,
+        log::debug("set = 0, binding = {}, count = {:04}, type = {}", b.binding, b.descriptorCount,
                    vk::to_string(b.descriptorType));
     log::debug("======================================================");
 
@@ -112,6 +112,37 @@ vk::UniqueDescriptorSetLayout BindlessTable::buildBindlessLayout(const VulkanCon
     context.device.getDescriptorSetLayoutSupport(&descriptorLayoutInfo, &support);
     if (!support.supported)
         log::exit("Mutable DescriptorSetLayout not supported");
+    return context.device.createDescriptorSetLayoutUnique(descriptorLayoutInfo);
+}
+
+vk::UniqueDescriptorSetLayout BindlessTable::buildConstantLayout(const VulkanContext& context)
+{
+    vk::DescriptorSetLayoutBinding binding;
+    binding.binding = 0;
+    binding.descriptorCount = 1;
+    binding.descriptorType = vk::DescriptorType::eUniformBuffer;
+    binding.stageFlags = vk::ShaderStageFlagBits::eAll;
+
+    log::debug("ConstantLayout:");
+    log::debug("set = 1, binding = {}, count = {:04}, type = {}", binding.binding, binding.descriptorCount,
+               vk::to_string(binding.descriptorType));
+    log::debug("======================================================");
+
+    vk::DescriptorSetLayoutCreateInfo descriptorLayoutInfo;
+    descriptorLayoutInfo.setBindings(binding);
+
+    vk::DescriptorSetLayoutBindingFlagsCreateInfo extended_info;
+    constexpr vk::DescriptorBindingFlags bindlessFlags = vk::DescriptorBindingFlagBits::ePartiallyBound;
+    std::vector<vk::DescriptorBindingFlags> binding_flags(descriptorLayoutInfo.bindingCount, bindlessFlags);
+    extended_info.setBindingFlags(binding_flags);
+
+    descriptorLayoutInfo.setFlags(vk::DescriptorSetLayoutCreateFlagBits::eDescriptorBufferEXT);
+    // descriptorLayoutInfo.setPNext(&extended_info);
+
+    vk::DescriptorSetLayoutSupport support;
+    context.device.getDescriptorSetLayoutSupport(&descriptorLayoutInfo, &support);
+    if (!support.supported)
+        log::exit("Constant DescriptorSetLayout not supported");
     return context.device.createDescriptorSetLayoutUnique(descriptorLayoutInfo);
 }
 
@@ -176,9 +207,35 @@ bool BindlessTable::visitBuffer(const BufferPtr& buffer, uint32_t slot)
     return true;
 }
 
+uint64_t BindlessTable::createCBV(Buffer* buffer)
+{
+    const vk::DescriptorType type = vk::DescriptorType::eUniformBuffer;
+
+    auto* cpuHandle = static_cast<std::byte*>(m_bufferDescriptor.hostInfo.pMappedData);
+    cpuHandle += getOffsetFromIndex(m_cbvCount);
+
+    vk::DescriptorAddressInfoEXT addrInfo;
+    addrInfo.address = buffer->getGPUAddress();
+    addrInfo.range = buffer->sizeInBytes();
+    addrInfo.format = buffer->format;
+
+    const vk::DescriptorGetInfoEXT info(type, &addrInfo);
+    m_context.device.getDescriptorEXT(info, getDescriptorSizeForType(type), cpuHandle);
+
+    return m_cbvCount++;
+}
+
 vk::DeviceAddress BindlessTable::bufferDescriptorGPUAddress() const
 {
     return m_bufferDescriptor.getGPUAddress();
+}
+
+uint64_t BindlessTable::getOffsetFromIndex(uint32_t index) const
+{
+    uint64_t cpuHandle = align(20000ull, 64ull);
+    cpuHandle += index * m_mutableDescriptorSize;
+    uint64_t test = align(cpuHandle, 64ull);
+    return test;
 }
 
 BindlessTablePtr Device::createBindlessTable(uint32_t count)

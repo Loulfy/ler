@@ -1,0 +1,76 @@
+namespace ler.pak;
+
+enum BufferType : byte { Index = 0, Position, Texcoord, Normal, Tangent }
+
+struct Buffer {
+    type:BufferType;
+}
+
+enum TextureFormat : byte { Bc1, Bc2, Bc3, Bc4, Bc5, Bc6, Bc7 }
+
+table Texture {
+    filename:string;
+    width:uint16;
+    height:uint16;
+    mip_levels:uint8;
+    format:TextureFormat;
+}
+
+union ResourceType {
+    Texture: Texture,
+    Buffer: Buffer
+}
+
+table PakEntry {
+    byte_length:uint64;
+    byte_offset:uint64;
+    resource: ResourceType;
+}
+
+struct Vec3 {
+    x:float;
+    y:float;
+    z:float;
+}
+
+enum ShadingMode : byte { PbrRoughnessMetallic, PbrSpecularGlosiness, Phong }
+
+enum AlphaMode : byte { Opaque, Mask, Blend }
+
+struct Material {
+    shading:ShadingMode;
+    alpha_mode:AlphaMode;
+    alpha_cut_off:float;
+    // emissive_color:Vec3;
+    base_color:Vec3;
+    texture:[uint64:6];
+    // 0: normal
+    // 1: diffuse
+    // 2: emissive
+    // 3: occlusion
+    // 4: extension
+}
+
+struct Mesh {
+    count_index:uint32;
+    first_index:uint32;
+    first_vertex:int32;
+    count_vertex:uint32;
+    bbmin:Vec3;
+    bbmax:Vec3;
+}
+
+struct Instance {
+    mesh_id:uint32;
+    skin_id:uint32;
+    transform:[float:16];
+}
+
+table PakArchive {
+    entries:[PakEntry];
+    materials:[Material];
+    instances:[Instance];
+    meshes:[Mesh];
+}
+
+root_type PakArchive;

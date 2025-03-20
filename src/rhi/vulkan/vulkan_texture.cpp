@@ -275,17 +275,17 @@ SamplerPtr Device::createSampler(const SamplerDesc& desc)
     vk::SamplerCreateInfo samplerInfo;
     samplerInfo.setMagFilter(desc.filter ? vk::Filter::eLinear : vk::Filter::eNearest);
     samplerInfo.setMinFilter(desc.filter ? vk::Filter::eLinear : vk::Filter::eNearest);
-    samplerInfo.setMipmapMode(vk::SamplerMipmapMode::eNearest);
+    samplerInfo.setMipmapMode(vk::SamplerMipmapMode::eLinear);
     samplerInfo.setAddressModeU(convertSamplerAddressMode(desc.addressU));
     samplerInfo.setAddressModeV(convertSamplerAddressMode(desc.addressV));
     samplerInfo.setAddressModeW(convertSamplerAddressMode(desc.addressW));
     samplerInfo.setMipLodBias(0.f);
-    samplerInfo.setAnisotropyEnable(false);
-    samplerInfo.setMaxAnisotropy(1.f);
+    samplerInfo.setAnisotropyEnable(true);
+    samplerInfo.setMaxAnisotropy(8.f);
     samplerInfo.setCompareEnable(false);
     samplerInfo.setCompareOp(vk::CompareOp::eLess);
     samplerInfo.setMinLod(0.f);
-    samplerInfo.setMaxLod(std::numeric_limits<float>::max());
+    samplerInfo.setMaxLod(VK_LOD_CLAMP_NONE);
     samplerInfo.setBorderColor(vk::BorderColor::eFloatOpaqueBlack);
 
     sampler->handle = m_context.device.createSamplerUnique(samplerInfo, nullptr);

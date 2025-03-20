@@ -13,8 +13,8 @@ uint32_t ShaderResourceView::getBindlessIndex() const
 
 void ShaderResourceView::destroy()
 {
-    if (m_allocator)
-        m_allocator->freeBindlessIndex(m_index);
+    //if (m_allocator)
+        //m_allocator->freeBindlessIndex(m_index);
     m_allocator = nullptr;
     m_index = UINT32_MAX;
 }

@@ -4,6 +4,7 @@
 
 #pragma once
 
+#include "archive_generated.h"
 #include "draw.hpp"
 #include "rhi/rhi.hpp"
 #include "scene_generated.h"
@@ -30,9 +31,11 @@ struct IndexedMesh
 class MeshBuffers
 {
   public:
-    void allocate(const rhi::DevicePtr& device, const flatbuffers::Vector<const scene::Buffer*>& bufferEntries);
-    void allocate(const rhi::DevicePtr& device, rhi::BindlessTablePtr& table, const flatbuffers::Vector<const scene::Material*>& materialEntries);
-    void load(const flatbuffers::Vector<const scene::Mesh*>& meshEntries);
+    friend class ResourceManager;
+    void allocate(const rhi::DevicePtr& device, uint64_t indexSize, uint64_t vertexSize);
+    void updateMeshes(const flatbuffers::Vector<const pak::Mesh*>& meshEntries);
+    void updateMaterials(const rhi::StoragePtr& storage, const flatbuffers::Vector<const pak::Material*>& materialEntries);
+    void flushBuffer(const rhi::DevicePtr& device);
     void bind(const rhi::CommandPtr& cmd, bool prePass) const;
     void bind(rhi::EncodeIndirectIndexedDrawDesc& drawDesc, bool prePass) const;
 
@@ -40,6 +43,11 @@ class MeshBuffers
     static constexpr uint32_t kShaderGroupSizeNV = 32;
     static constexpr uint32_t kMaxVerticesPerMeshlet = 64;
     static constexpr uint32_t kMaxTrianglesPerMeshlet = 124;
+    static constexpr uint32_t kNormalTexId = 0;
+    static constexpr uint32_t kAlbedoTexId = 1;
+    static constexpr uint32_t kEmissiveTexId = 2;
+    static constexpr uint32_t kOcclusionTexId = 3;
+    static constexpr uint32_t kPbrTexId = 4;
 
     //[[nodiscard]] const BufferPtr& getVertexBuffer() const;
     //[[nodiscard]] const BufferPtr& getIndexBuffer() const;
@@ -50,8 +58,6 @@ class MeshBuffers
 
     const IndexedMesh& getMesh(uint32_t id) const;
 
-    [[nodiscard]] bool isLoaded() const;
-
   private:
     /*
      * 0 : vertex
@@ -61,6 +67,9 @@ class MeshBuffers
      * 4 : material
      * 5 : meshlet
      */
+
+    static constexpr std::array<std::string_view, 4> kNames = { "PositionBuffer", "TexcoordBuffer", "NormalBuffer",
+                                                                "TangentBuffer" };
 
     rhi::ReadOnlyFilePtr m_file;
     std::vector<rhi::ReadOnlyFilePtr> m_files;

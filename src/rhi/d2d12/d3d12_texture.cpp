@@ -127,13 +127,13 @@ SamplerPtr Device::createSampler(const SamplerDesc& desc)
 {
     auto sampler = std::make_shared<Sampler>();
 
-    sampler->desc.Filter = D3D12_FILTER_MIN_LINEAR_MAG_MIP_POINT;
+    sampler->desc.Filter = D3D12_FILTER_ANISOTROPIC;
     sampler->desc.AddressU = convertSamplerAddressMode(desc.addressU);
     sampler->desc.AddressV = convertSamplerAddressMode(desc.addressV);
     sampler->desc.AddressW = convertSamplerAddressMode(desc.addressW);
     sampler->desc.MipLODBias = 0.f;
-    sampler->desc.MaxAnisotropy = 1.f;
-    sampler->desc.ComparisonFunc = D3D12_COMPARISON_FUNC_LESS;
+    sampler->desc.MaxAnisotropy = 8.f;
+    sampler->desc.ComparisonFunc = D3D12_COMPARISON_FUNC_NONE;
     sampler->desc.BorderColor[0] = 0.f;
     sampler->desc.BorderColor[1] = 0.f;
     sampler->desc.BorderColor[2] = 0.f;

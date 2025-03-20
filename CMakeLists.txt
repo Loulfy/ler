@@ -68,6 +68,7 @@ set(SRC
     "src/rhi/storage.cpp"
     "src/app/desktop.hpp"
     "src/app/desktop.cpp"
+    "src/rhi/common.cpp"
     "src/rhi/shader/compiler.cpp"
     "src/rhi/vulkan/vulkan_device.cpp"
     "src/rhi/vulkan/vulkan_format.cpp"
@@ -79,6 +80,8 @@ set(SRC
     "src/rhi/vulkan/vulkan_storage.cpp"
     "src/rhi/vulkan/vulkan_library.cpp"
     "src/rhi/vulkan/vulkan_imgui.cpp"
+    "src/render/resource_mgr.hpp"
+    "src/render/resource_mgr.cpp"
     "src/render/mesh_list.hpp"
     "src/render/mesh_list.cpp"
     "src/camera/camera.hpp"
@@ -152,9 +155,11 @@ if (CMAKE_SYSTEM_NAME STREQUAL "Windows")
 endif()
 
 flatbuffers_generate_headers(TARGET generated_cppmessages SCHEMAS "res/scene.fbs" FLAGS ${FLATC_CPP_FLAGS})
+flatbuffers_generate_headers(TARGET generated_archive SCHEMAS "res/archive.fbs" FLAGS "--reflect-names")
 
 add_executable(gdev main.cpp ${SRC} ${WIN32_RESOURCES} ${PROTO_SRCS} ${PROTO_HDRS})
 add_dependencies(gdev GENERATE_generated_cppmessages)
+add_dependencies(gdev GENERATE_generated_archive)
 target_link_libraries(gdev PRIVATE PkgConfig::Coro)
 target_link_libraries(gdev PRIVATE spdlog::spdlog)
 target_link_libraries(gdev PRIVATE assimp::assimp)
@@ -164,6 +169,7 @@ target_link_libraries(gdev PRIVATE Vulkan::Vulkan GPUOpen::VulkanMemoryAllocator
 target_link_libraries(gdev PRIVATE Microsoft::DirectXShaderCompiler)
 target_include_directories(gdev PRIVATE ${Stb_INCLUDE_DIR})
 target_link_libraries(gdev PRIVATE generated_cppmessages)
+target_link_libraries(gdev PRIVATE generated_archive)
 target_link_libraries(gdev PRIVATE flatbuffers::flatbuffers)
 target_link_libraries(gdev PRIVATE nlohmann_json::nlohmann_json)
 target_link_libraries(gdev PRIVATE meshoptimizer::meshoptimizer)
@@ -208,17 +214,46 @@ endif()
 
 set(OPTION_BUILD_CMP_SDK ON)
 set(OPTION_ENABLE_ALL_APPS OFF)
+set(OPTION_BUILD_BROTLIG OFF)
 set(CMAKE_POLICY_DEFAULT_CMP0077 NEW)
+#set(OPTION_CMP_DIRECTX ON)
 add_subdirectory(libs/compressonator)
 
 add_executable(packer pack.cpp ${SRC_PACKER} ${PROTO_SRCS} ${PROTO_HDRS})
 add_dependencies(packer GENERATE_generated_cppmessages)
 target_link_libraries(packer PRIVATE spdlog::spdlog)
 target_link_libraries(packer PRIVATE assimp::assimp)
+target_link_libraries(packer PRIVATE xxHash::xxhash)
+target_link_libraries(packer PRIVATE basisu::basisu_encoder)
 target_link_libraries(packer PRIVATE generated_cppmessages)
 target_link_libraries(packer PRIVATE flatbuffers::flatbuffers)
 target_link_libraries(packer PRIVATE meshoptimizer::meshoptimizer)
 target_link_libraries(packer PRIVATE CMP_Framework)
 if (CMAKE_SYSTEM_NAME STREQUAL "Windows")
     target_link_libraries(packer PRIVATE dxguid wbemuuid)
+endif()
+
+set(SRC_LER_PAK
+    "src/packer/main.cpp"
+    "src/packer/importer.hpp"
+    "src/packer/material.cpp"
+    "src/packer/texture.cpp"
+    "src/packer/archive.cpp"
+    "src/packer/mesh.cpp"
+    "src/sys/utils.hpp"
+    "src/sys/utils.cpp"
+)
+
+add_executable(lerPak ${SRC_LER_PAK})
+target_link_libraries(lerPak PRIVATE spdlog::spdlog)
+target_link_libraries(lerPak PRIVATE assimp::assimp)
+target_link_libraries(lerPak PRIVATE xxHash::xxhash)
+target_link_libraries(lerPak PRIVATE CMP_Core CMP_Framework CMP_Compressonator)
+target_link_libraries(lerPak PRIVATE generated_archive)
+target_link_libraries(lerPak PRIVATE flatbuffers::flatbuffers)
+target_link_libraries(lerPak PRIVATE meshoptimizer::meshoptimizer)
+target_include_directories(lerPak PRIVATE ${Stb_INCLUDE_DIR})
+add_dependencies(lerPak GENERATE_generated_archive)
+if (CMAKE_SYSTEM_NAME STREQUAL "Windows")
+    target_link_libraries(lerPak PRIVATE dxguid wbemuuid)
 endif()

@@ -1,9 +1,10 @@
 //
-// Created by loulfy on 04/12/2023.
+// Created by Loulfy on 04/12/2023.
 //
 
 #pragma once
 
+#include "render/resource_mgr.hpp"
 #include "camera/camera.hpp"
 #include "render/graph.hpp"
 #include "render/pass.hpp"
@@ -59,10 +60,12 @@ class DesktopApp
     GLFWwindow* m_window = nullptr;
     rhi::DevicePtr m_device;
     rhi::SwapChainPtr m_swapChain;
+    rhi::BindlessTablePtr m_table;
+    std::vector<rhi::SamplerPtr> m_samplers;
     std::vector<std::shared_ptr<rhi::IRenderPass>> m_renderPasses;
     std::vector<render::IMeshRenderer*> m_meshRenderer;
-    render::MeshBuffers m_meshBuffers;
-    render::RenderMeshList m_meshList;
+    render::ResourceManager m_resourceMgr;
+    render::RenderMeshList* m_meshList = nullptr;
     cam::CameraPtr m_camera;
 };
 } // namespace ler::app

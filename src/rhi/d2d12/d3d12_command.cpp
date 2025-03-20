@@ -25,6 +25,12 @@ void Device::submitOneShot(const CommandPtr& command)
     m_queues[static_cast<int>(command->queueType)]->submitAndWait(command);
 }
 
+void Device::beginFrame(uint32_t frameIndex)
+{
+    m_context.frameIndex = frameIndex;
+    m_context.scratchBufferPool[frameIndex]->reset();
+}
+
 void Device::runGarbageCollection()
 {
     for (std::unique_ptr<Queue>& queue : m_queues)
@@ -55,7 +61,7 @@ Queue::Queue(const D3D12Context& context, QueueType queueID) : rhi::Queue(queueI
 
 rhi::CommandPtr Queue::createCommandBuffer()
 {
-    auto command = std::make_shared<Command>();
+    auto command = std::make_shared<Command>(m_context);
     command->queueType = m_queueType;
     command->m_gpuHeap = m_context.descriptorPool[D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV].get();
 
@@ -263,6 +269,28 @@ void Command::fillBuffer(const BufferPtr& dst, uint32_t value) const
     m_commandList->ClearUnorderedAccessViewUint(gpuHandle, cpuHandle, buff->handle, clears.data(), 0, nullptr);
 }
 
+void Command::syncBuffer(const BufferPtr& dst, const void* src, uint64_t byteSize)
+{
+    assert(queueType == QueueType::Graphics);
+    const auto* buffDst = checked_cast<Buffer*>(dst.get());
+
+    const std::unique_ptr<ScratchBuffer>& scratchBuffer = m_context.scratchBufferPool[m_context.frameIndex];
+    uint64_t offset = scratchBuffer->allocate(byteSize);
+    auto* buffer = static_cast<Buffer*>(scratchBuffer->getBuffer().get());
+    void* pMappedData;
+    if (buffer->staging() && buffer->sizeInBytes() >= byteSize && SUCCEEDED(buffer->handle->Map(0, nullptr, &pMappedData)))
+    {
+        auto* pCursor = static_cast<std::byte*>(pMappedData);
+        memcpy(pCursor + offset, src, byteSize);
+        buffer->handle->Unmap(0, nullptr);
+
+        addBufferBarrier(dst, CopyDest);
+        m_commandList->CopyBufferRegion(buffDst->handle, 0, buffer->handle, offset, byteSize);
+    }
+    else
+        log::error("Failed to upload to Scratch Buffer");
+}
+
 void Command::bindIndexBuffer(const BufferPtr& indexBuffer)
 {
     const auto* buff = checked_cast<Buffer*>(indexBuffer.get());
@@ -343,24 +371,29 @@ void Command::bindPipeline(const PipelinePtr& pipeline, uint32_t descriptorHandl
     }
 }
 
-void Command::bindPipeline(const PipelinePtr& pipeline, const BindlessTablePtr& table)
+void Command::bindPipeline(const PipelinePtr& pipeline, const BindlessTablePtr& table, const BufferPtr& constantBuffer)
 {
     const auto* native = checked_cast<Pipeline*>(pipeline.get());
     m_commandList->SetPipelineState(native->pipelineState.Get());
 
     const auto* bindless = checked_cast<BindlessTable*>(table.get());
+    const auto* constant = checked_cast<Buffer*>(constantBuffer.get());
 
     const std::array<ID3D12DescriptorHeap*, 2> heaps = bindless->heaps();
     m_commandList->SetDescriptorHeaps(heaps.size(), heaps.data());
 
+    D3D12_GPU_VIRTUAL_ADDRESS cbvAddr = constant->handle->GetGPUVirtualAddress();
+
     if (native->isGraphics())
     {
         m_commandList->SetGraphicsRootSignature(native->rootSignature.Get());
+        m_commandList->SetGraphicsRootConstantBufferView(0, cbvAddr);
         m_commandList->IASetPrimitiveTopology(native->topology);
     }
     else
     {
         m_commandList->SetComputeRootSignature(native->rootSignature.Get());
+        m_commandList->SetComputeRootConstantBufferView(0, cbvAddr);
     }
 }
 
@@ -371,6 +404,16 @@ void Command::pushConstant(const PipelinePtr& pipeline, ShaderType stage, uint32
         m_commandList->SetGraphicsRoot32BitConstants(0u, size / sizeof(uint32_t), data, 0u);
     else
         m_commandList->SetComputeRoot32BitConstants(0u, size / sizeof(uint32_t), data, 0u);
+}
+
+void Command::setConstant(const BufferPtr& buffer, ShaderType stage)
+{
+    const auto* constant = checked_cast<Buffer*>(buffer.get());
+    D3D12_GPU_VIRTUAL_ADDRESS addr = constant->handle->GetGPUVirtualAddress();
+    if(stage == ShaderType::Compute)
+        m_commandList->SetComputeRootConstantBufferView(0, addr);
+    else
+        m_commandList->SetGraphicsRootConstantBufferView(0, addr);
 }
 
 void Command::beginRendering(const rhi::PipelinePtr& pipeline, TexturePtr& backBuffer)

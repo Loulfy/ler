@@ -33,6 +33,7 @@ ReadOnlyFilePtr Storage::openFile(const fs::path& path)
 {
     auto file = std::make_shared<ReadOnlyFile>();
     m_context.storage->OpenFile(path.c_str(), IID_PPV_ARGS(&file->handle));
+    file->path = path;
     file->filename = path.filename().string();
     return file;
 }
@@ -85,7 +86,7 @@ coro::task<> Storage::makeSingleTextureTask(coro::latch& latch, BindlessTablePtr
     TexturePtr texture;
     DSTORAGE_REQUEST request = {};
     queueTexture(file, request);
-    int bufferIndex = acquireStaging();
+    int bufferIndex = co_await acquireStaging();
     request.Destination.Memory.Buffer = m_buffers[bufferIndex];
     request.Destination.Memory.Size = file->sizeInBytes();
     request.Source.File.Size = file->sizeInBytes();
@@ -93,7 +94,7 @@ coro::task<> Storage::makeSingleTextureTask(coro::latch& latch, BindlessTablePtr
 
     submitWait();
 
-    ddsktx_texture_info tc = {0};
+    ddsktx_texture_info tc = { 0 };
     bool succeeded = ddsktx_parse(&tc, m_buffers[bufferIndex], file->sizeInBytes(), nullptr);
 
     img::ITexture* tex = factoryTexture(file, m_buffers[bufferIndex]);
@@ -103,8 +104,8 @@ coro::task<> Storage::makeSingleTextureTask(coro::latch& latch, BindlessTablePtr
     desc.debugName = file->getFilename();
     texture = m_device->createTexture(desc);
 
-    //uint32_t texId = table->allocate();
-    //table->setResource(texture, texId);
+    // uint32_t texId = table->allocate();
+    // table->setResource(texture, texId);
 
     {
         std::lock_guard lock = table->lock();
@@ -171,7 +172,7 @@ coro::task<> Storage::makeMultiTextureTask(coro::latch& latch, BindlessTablePtr 
         if (offset + byteSizes > capacity)
         {
             offset = 0;
-            bufferId = acquireStaging();
+            bufferId = co_await acquireStaging();
             stagings.emplace_back(bufferId);
         }
 
@@ -187,6 +188,8 @@ coro::task<> Storage::makeMultiTextureTask(coro::latch& latch, BindlessTablePtr 
     submitWait();
 
     CommandPtr cmd = m_device->createCommand(QueueType::Transfer);
+    std::vector<TextureStreaming> result;
+    result.reserve(files.size());
 
     {
         std::lock_guard lock = table->lock();
@@ -205,8 +208,8 @@ coro::task<> Storage::makeMultiTextureTask(coro::latch& latch, BindlessTablePtr 
 
             // uint32_t texIndex = table->allocate();
             TexturePtr texture = m_device->createTexture(desc);
-            ResourceViewPtr view = table->createResourceView(texture);
-            log::info("Load texture {:03}: {}", view->getBindlessIndex(), desc.debugName);
+            result.emplace_back(table->createResourceView(texture), desc.debugName);
+            log::info("Load texture {:03}: {}", result.back().view->getBindlessIndex(), desc.debugName);
             // table->setResource(texture, texIndex);
 
             for (const size_t mip : std::views::iota(0u, levels.size()))
@@ -226,13 +229,49 @@ coro::task<> Storage::makeMultiTextureTask(coro::latch& latch, BindlessTablePtr 
     }
 
     m_device->submitOneShot(cmd);
+    m_dispatcher.enqueue(result);
 
     latch.count_down();
     for (const uint32_t buffId : stagings)
         releaseStaging(buffId);
 
-    m_dispatcher.enqueue(42);
+    co_return;
+}
 
+coro::task<> Storage::makeMultiTextureTask(coro::latch& latch, BindlessTablePtr table,
+                                           std::vector<TextureStreamingMetadata> textures)
+{
+    std::vector<TextureStreaming> result;
+    result.reserve(textures.size());
+
+    {
+        std::lock_guard lock = table->lock();
+        for (const TextureStreamingMetadata& metadata : textures)
+        {
+            TexturePtr texture = m_device->createTexture(metadata.desc);
+            result.emplace_back(table->createResourceView(texture), metadata.desc.debugName);
+            log::info("Load texture {:03}: {}", result.back().view->getBindlessIndex(), metadata.desc.debugName);
+
+            DSTORAGE_REQUEST request = {};
+            request.Options.SourceType = DSTORAGE_REQUEST_SOURCE_FILE;
+            request.Options.DestinationType = DSTORAGE_REQUEST_DESTINATION_MULTIPLE_SUBRESOURCES;
+            request.Options.CompressionFormat = DSTORAGE_COMPRESSION_FORMAT_NONE;
+            request.Source.File.Source = checked_cast<ReadOnlyFile*>(metadata.file.get())->handle.Get();
+            request.Source.File.Offset = metadata.byteOffset;
+            request.Source.File.Size = metadata.byteLength;
+
+            request.Destination.MultipleSubresources.FirstSubresource = 0;
+            request.Destination.MultipleSubresources.Resource = checked_cast<Texture*>(texture.get())->handle;
+            m_queue->EnqueueRequest(&request);
+        }
+    }
+
+    submitWait();
+
+    auto resCountDown = static_cast<int64_t>(result.size());
+    m_dispatcher.enqueue(result);
+
+    latch.count_down(resCountDown);
     co_return;
 }
 

@@ -26,6 +26,12 @@ void Device::submitOneShot(const CommandPtr& command)
     m_queues[static_cast<int>(command->queueType)]->submitAndWait(command);
 }
 
+void Device::beginFrame(uint32_t frameIndex)
+{
+    m_context.frameIndex = frameIndex;
+    m_context.scratchBufferPool[frameIndex]->reset();
+}
+
 void Device::runGarbageCollection()
 {
     for (std::unique_ptr<Queue>& queue : m_queues)
@@ -136,14 +142,14 @@ uint64_t Queue::submit(const std::span<CommandPtr>& ppCmd)
     }
 
     const auto submitInfo = vk::SubmitInfo()
-                          .setPNext(&timelineSemaphoreInfo)
-                          .setCommandBufferCount(static_cast<uint32_t>(ppCmd.size()))
-                          .setPCommandBuffers(commandBuffers.data())
-                          .setWaitSemaphoreCount(static_cast<uint32_t>(m_waitSemaphores.size()))
-                          .setPWaitSemaphores(m_waitSemaphores.data())
-                          .setPWaitDstStageMask(waitStageArray.data())
-                          .setSignalSemaphoreCount(static_cast<uint32_t>(m_signalSemaphores.size()))
-                          .setPSignalSemaphores(m_signalSemaphores.data());
+                                .setPNext(&timelineSemaphoreInfo)
+                                .setCommandBufferCount(static_cast<uint32_t>(ppCmd.size()))
+                                .setPCommandBuffers(commandBuffers.data())
+                                .setWaitSemaphoreCount(static_cast<uint32_t>(m_waitSemaphores.size()))
+                                .setPWaitSemaphores(m_waitSemaphores.data())
+                                .setPWaitDstStageMask(waitStageArray.data())
+                                .setSignalSemaphoreCount(static_cast<uint32_t>(m_signalSemaphores.size()))
+                                .setPSignalSemaphores(m_signalSemaphores.data());
 
     m_queue.submit(submitInfo);
 
@@ -421,6 +427,7 @@ void Command::copyBufferToTexture(const BufferPtr& buffer, const TexturePtr& tex
     copyRegion.imageExtent.depth = sub.depth;
     copyRegion.imageExtent.width = sub.width;
     copyRegion.imageExtent.height = sub.height;
+    copyRegion.bufferRowLength = sub.rowPitch;
     copyRegion.imageSubresource = vk::ImageSubresourceLayers(vk::ImageAspectFlagBits::eColor, sub.index, 0, 1);
     cmdBuf.copyBufferToImage(staging->handle, image->handle, vk::ImageLayout::eTransferDstOptimal, 1, &copyRegion);
     // prepare texture to color layout
@@ -438,7 +445,22 @@ void Command::copyBuffer(const BufferPtr& src, const BufferPtr& dst, uint64_t by
 
 void Command::syncBuffer(const BufferPtr& dst, const void* src, uint64_t byteSize)
 {
-    // TODO: IMPL ASAP
+    assert(queueType == QueueType::Graphics);
+    const std::unique_ptr<ScratchBuffer>& scratchBuffer = m_context.scratchBufferPool[m_context.frameIndex];
+    const auto* buffSrc = checked_cast<Buffer*>(scratchBuffer->getBuffer().get());
+    const auto* buffDst = checked_cast<Buffer*>(dst.get());
+    uint64_t srcOffset = scratchBuffer->allocate(byteSize);
+    if (buffSrc->staging() && buffSrc->sizeInBytes() >= byteSize)
+    {
+        auto* pCursor = static_cast<std::byte*>(buffSrc->hostInfo.pMappedData);
+        memcpy(pCursor + srcOffset, src, byteSize);
+
+        addBufferBarrier(dst, CopyDest);
+        const vk::BufferCopy copyRegion(srcOffset, 0u, byteSize);
+        cmdBuf.copyBuffer(buffSrc->handle, buffDst->handle, 1, &copyRegion);
+    }
+    else
+        log::error("Failed to upload to Scratch Buffer");
 }
 
 void Command::fillBuffer(const BufferPtr& dst, uint32_t value) const
@@ -505,12 +527,14 @@ void Command::bindPipeline(const rhi::PipelinePtr& pipeline, uint32_t descriptor
                               native->getDescriptorSet(descriptorHandle), nullptr);
 }
 
-void Command::bindPipeline(const rhi::PipelinePtr& pipeline, const BindlessTablePtr& table)
+void Command::bindPipeline(const rhi::PipelinePtr& pipeline, const BindlessTablePtr& table,
+                           const BufferPtr& constantBuffer)
 {
     auto* native = checked_cast<BasePipeline*>(pipeline.get());
+    auto* constant = checked_cast<Buffer*>(constantBuffer.get());
     cmdBuf.bindPipeline(native->bindPoint, native->handle.get());
 
-    const auto* bindless = checked_cast<BindlessTable*>(table.get());
+    auto* bindless = checked_cast<BindlessTable*>(table.get());
 
     vk::DescriptorBufferBindingInfoEXT bindingInfo;
     bindingInfo.setAddress(bindless->bufferDescriptorGPUAddress());
@@ -518,9 +542,12 @@ void Command::bindPipeline(const rhi::PipelinePtr& pipeline, const BindlessTable
                          vk::BufferUsageFlagBits::eSamplerDescriptorBufferEXT);
     cmdBuf.bindDescriptorBuffersEXT(bindingInfo);
 
-    constexpr uint32_t bufferId = 0;
-    constexpr vk::DeviceSize offset = 0;
-    cmdBuf.setDescriptorBufferOffsetsEXT(native->bindPoint, native->pipelineLayout.get(), 0, 1, &bufferId, &offset);
+    constexpr std::array<uint32_t, 2> bufferId = { 0 };
+    std::array<vk::DeviceSize, 2> offset = { 0 };
+    if(constant->cbvIndex == UINT32_MAX)
+        constant->cbvIndex = bindless->createCBV(constant);
+    offset[1] = bindless->getOffsetFromIndex(constant->cbvIndex);
+    cmdBuf.setDescriptorBufferOffsetsEXT(native->bindPoint, native->pipelineLayout.get(), 0, 2, bufferId.data(), offset.data());
 }
 
 static constexpr vk::ShaderStageFlags convertShaderStage(ShaderType stage)
@@ -541,6 +568,9 @@ static constexpr vk::ShaderStageFlags convertShaderStage(ShaderType stage)
 
 void Command::setConstant(const BufferPtr& buffer, ShaderType stage)
 {
+    constexpr uint32_t bufferId = 0;
+    constexpr vk::DeviceSize offset = 0;
+    // cmdBuf.setDescriptorBufferOffsetsEXT(native->bindPoint, native->pipelineLayout.get(), 1, 1, &bufferId, &offset);
 }
 
 void Command::pushConstant(const rhi::PipelinePtr& pipeline, ShaderType stage, uint32_t slot, const void* data,

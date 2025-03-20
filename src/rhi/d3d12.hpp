@@ -104,6 +104,8 @@ struct D3D12Context
     ID3D12CommandQueue* queue = nullptr;
     std::array<std::unique_ptr<DescriptorHeapAllocator>, D3D12_DESCRIPTOR_HEAP_TYPE_NUM_TYPES> descriptorPool;
     std::unique_ptr<DescriptorHeapAllocator> descriptorPoolCpuOnly;
+    std::array<std::unique_ptr<ScratchBuffer>, ISwapChain::FrameCount> scratchBufferPool;
+    uint32_t frameIndex = 0;
 };
 
 struct DxgiFormatMapping
@@ -187,7 +189,7 @@ class BindlessTable : public CommonBindlessTable
   public:
     BindlessTable(const D3D12Context& context, uint32_t count);
     void setSampler(const SamplerPtr& sampler, uint32_t slot) override;
-    std::array<ID3D12DescriptorHeap*, 2> heaps() const
+    [[nodiscard]] std::array<ID3D12DescriptorHeap*, 2> heaps() const
     {
         return { m_heapRes.Get(), m_heapSamp.Get() };
     }
@@ -249,15 +251,19 @@ struct Pipeline : public IPipeline
 class Command : public ICommand
 {
   public:
+    // clang-format off
+    explicit Command(const D3D12Context& context) : m_context(context) { }
+    // clang-format on
     ComPtr<ID3D12GraphicsCommandList> m_commandList;
     ComPtr<ID3D12CommandAllocator> m_commandAllocator;
     DescriptorHeapAllocator* m_gpuHeap = nullptr;
+    const D3D12Context& m_context;
 
     // clang-format off
     void reset() override;
     void bindPipeline(const PipelinePtr& pipeline, uint32_t descriptorHandle) const override;
-    void bindPipeline(const PipelinePtr& pipeline, const BindlessTablePtr& table)  override;
-    void setConstant(const BufferPtr& buffer, ShaderType stage) override {}
+    void bindPipeline(const PipelinePtr& pipeline, const BindlessTablePtr& table, const BufferPtr& constantBuffer)  override;
+    void setConstant(const BufferPtr& buffer, ShaderType stage) override;
     void pushConstant(const PipelinePtr& pipeline, ShaderType stage, uint32_t slot, const void* data, uint8_t size) override;
     void drawPrimitives(uint32_t vertexCount) const override;
     void drawIndexedPrimitives(uint32_t indexCount, uint32_t firstIndex, int32_t firstVertex, uint32_t instanceId) const override;
@@ -272,7 +278,7 @@ class Command : public ICommand
     void clearColorImage(const TexturePtr& texture, const std::array<float,4>& color) const override;
     void copyBufferToTexture(const BufferPtr& buffer, const TexturePtr& texture, const Subresource& sub, const unsigned char* pSrcData) const override;
     void copyBuffer(const BufferPtr& src, const BufferPtr& dst, uint64_t byteSize, uint64_t dstOffset) override;
-    void syncBuffer(const BufferPtr& dst, const void* src, uint64_t byteSize) override {}
+    void syncBuffer(const BufferPtr& dst, const void* src, uint64_t byteSize) override;
     void fillBuffer(const BufferPtr& dst, uint32_t value) const override;
     void bindIndexBuffer(const BufferPtr& indexBuffer) override;
     void bindVertexBuffers(uint32_t slot, const BufferPtr& indexBuffer) override;
@@ -306,6 +312,7 @@ class Queue : public rhi::Queue
 struct SwapChain : public ISwapChain
 {
   public:
+    friend class Device;
     // clang-format off
     explicit SwapChain(const D3D12Context& context) : m_context(context) { }
     // clang-format on
@@ -318,6 +325,7 @@ struct SwapChain : public ISwapChain
 
     ComPtr<IDXGISwapChain3> handle;
     std::array<ComPtr<ID3D12Resource>, FrameCount> renderTargets;
+    Device* device = nullptr;
 
   private:
     UINT m_frameIndex = 0;
@@ -339,14 +347,19 @@ struct StorageRequest
 
 struct ReadOnlyFile : public IReadOnlyFile
 {
-    std::string getFilename() override { return filename; }
-    uint64_t sizeInBytes() override {
+    std::string getFilename() override
+    {
+        return filename;
+    }
+    uint64_t sizeInBytes() override
+    {
         BY_HANDLE_FILE_INFORMATION info;
         handle->GetFileInformation(&info);
         return info.nFileSizeLow;
     }
 
     ComPtr<IDStorageFile> handle;
+    fs::path path;
     std::string filename = "Unknown";
 };
 
@@ -368,6 +381,8 @@ class Storage : public CommonStorage
                                       std::vector<ReadOnlyFilePtr> files) override;
     coro::task<> makeBufferTask(coro::latch& latch, ReadOnlyFilePtr file, BufferPtr buffer, uint64_t fileLength,
                                 uint64_t fileOffset) override;
+    coro::task<> makeMultiTextureTask(coro::latch& latch, BindlessTablePtr table,
+                                      std::vector<TextureStreamingMetadata> textures) override;
 };
 
 class MappedFile
@@ -454,6 +469,7 @@ class Device : public IDevice
     void submitCommand(CommandPtr& command) override;
     void submitOneShot(const CommandPtr& command) override;
     void runGarbageCollection() override;
+    void beginFrame(uint32_t frameIndex) override;
 
     // clang-format off
     StoragePtr getStorage() override { return m_storage; }

@@ -27,6 +27,8 @@ template <typename T> T align(T size, T alignment)
     return (size + alignment - 1) & ~(alignment - 1);
 }
 
+using Latch = std::shared_ptr<coro::latch>;
+
 class IResource
 {
   protected:
@@ -246,7 +248,8 @@ class ICommand
     virtual ~ICommand() = default;
     virtual void reset() = 0;
     virtual void bindPipeline(const PipelinePtr& pipeline, uint32_t descriptorHandle) const = 0;
-    virtual void bindPipeline(const PipelinePtr& pipeline, const BindlessTablePtr& table) = 0;
+    virtual void bindPipeline(const PipelinePtr& pipeline, const BindlessTablePtr& table,
+                              const BufferPtr& constantBuffer) = 0;
     virtual void setConstant(const BufferPtr& buffer, ShaderType stage) = 0;
     virtual void pushConstant(const PipelinePtr& pipeline, ShaderType stage, uint32_t slot, const void* data,
                               uint8_t size) = 0;
@@ -305,7 +308,25 @@ class IReadOnlyFile
 
 using ReadOnlyFilePtr = std::shared_ptr<IReadOnlyFile>;
 
-using BundleResourceView = std::vector<ShaderResourceView>;
+struct TextureStreaming
+{
+    ResourceViewPtr view;
+    std::string stem;
+};
+
+using TextureStreamingBatch = std::vector<TextureStreaming>;
+
+struct StorageError
+{
+};
+
+struct TextureStreamingMetadata
+{
+    TextureDesc desc;
+    uint64_t byteOffset = 0;
+    uint64_t byteLength = 0;
+    ReadOnlyFilePtr file;
+};
 
 class IStorage
 {
@@ -319,6 +340,9 @@ class IStorage
     virtual void requestLoadBuffer(coro::latch& latch, const ReadOnlyFilePtr& file, BufferPtr& buffer,
                                    uint64_t fileLength, uint64_t fileOffset) = 0;
     virtual void requestOpenTexture(coro::latch& latch, BindlessTablePtr& table, const std::span<fs::path>& paths) = 0;
+    virtual void requestLoadTexture(coro::latch& latch, BindlessTablePtr& table,
+                                    const std::span<TextureStreamingMetadata>& textures) = 0;
+    virtual std::expected<ResourceViewPtr, StorageError> getResource(uint64_t pathKey) = 0;
 };
 
 using StoragePtr = std::shared_ptr<IStorage>;
@@ -366,13 +390,12 @@ class IDevice
     virtual void submitCommand(CommandPtr& command) = 0;
     virtual void submitOneShot(const CommandPtr& command) = 0;
     virtual void runGarbageCollection() = 0;
+    virtual void beginFrame(uint32_t frameIndex) = 0;
 
     virtual StoragePtr getStorage() = 0;
 };
 
 using DevicePtr = std::shared_ptr<IDevice>;
-
-using Latch = std::shared_ptr<coro::latch>;
 
 class IRenderPass
 {
@@ -385,6 +408,20 @@ class IRenderPass
     virtual void resize(const DevicePtr& device, const Extent& viewport) { }
     [[nodiscard]] virtual bool startup() const { return true; }
     // clang-format on
+};
+
+class ScratchBuffer
+{
+  public:
+    explicit ScratchBuffer(IDevice* device);
+    uint64_t allocate(uint32_t sizeInByte);
+    [[nodiscard]] const BufferPtr& getBuffer() const;
+    void reset();
+
+  private:
+    static constexpr uint64_t m_capacity = sys::C08Mio;
+    std::atomic_uint64_t m_size = 0;
+    BufferPtr m_staging;
 };
 
 struct StringFormatMapping

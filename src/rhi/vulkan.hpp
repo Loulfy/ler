@@ -68,8 +68,11 @@ struct VulkanContext
     VmaAllocator allocator = nullptr;
     vk::PipelineCache pipelineCache;
     vk::DescriptorSetLayout bindlessLayout;
+    vk::DescriptorSetLayout constantLayout;
     vk::PhysicalDeviceDescriptorBufferPropertiesEXT descBufferProperties;
+    std::array<std::unique_ptr<ScratchBuffer>, ISwapChain::FrameCount> scratchBufferPool;
     uint64_t hostPointerAlignment = 4096u;
+    uint32_t frameIndex = 0;
     bool hostBuffer = true;
     bool debug = false;
 };
@@ -83,6 +86,7 @@ struct Buffer final : IBuffer
     VmaAllocationCreateInfo allocInfo = {};
     VmaAllocationInfo hostInfo = {};
     vk::Format format = vk::Format::eUndefined;
+    uint32_t cbvIndex = UINT32_MAX;
 
     // clang-format off
     ~Buffer() override;
@@ -159,7 +163,10 @@ class BindlessTable final : public CommonBindlessTable
     void setSampler(const SamplerPtr& sampler, uint32_t slot) override;
 
     static vk::UniqueDescriptorSetLayout buildBindlessLayout(const VulkanContext& context, uint32_t count);
+    static vk::UniqueDescriptorSetLayout buildConstantLayout(const VulkanContext& context);
+    uint64_t createCBV(Buffer* buffer);
     [[nodiscard]] vk::DeviceAddress bufferDescriptorGPUAddress() const;
+    [[nodiscard]] uint64_t getOffsetFromIndex(uint32_t index) const;
 
   private:
     const VulkanContext& m_context;
@@ -167,6 +174,7 @@ class BindlessTable final : public CommonBindlessTable
     vk::DeviceSize m_mutableDescriptorOffset = 0u;
     vk::DeviceSize m_samplerDescriptorOffset = 0u;
     Buffer m_bufferDescriptor;
+    uint32_t m_cbvCount = 0;
 
     static constexpr std::initializer_list<vk::DescriptorType> kStandard = {
         vk::DescriptorType::eSampledImage, vk::DescriptorType::eUniformBuffer, vk::DescriptorType::eStorageBuffer,
@@ -246,7 +254,7 @@ class Command final : public ICommand
 
     void reset() override;
     void bindPipeline(const rhi::PipelinePtr& pipeline, uint32_t descriptorHandle) const override;
-    void bindPipeline(const rhi::PipelinePtr& pipeline, const BindlessTablePtr& table) override;
+    void bindPipeline(const rhi::PipelinePtr& pipeline, const BindlessTablePtr& table, const BufferPtr& constantBuffer) override;
     void setConstant(const BufferPtr& buffer, ShaderType stage) override;
     void pushConstant(const rhi::PipelinePtr& pipeline, ShaderType stage, uint32_t slot, const void* data, uint8_t size) override;
     void drawPrimitives(uint32_t vertexCount) const override;
@@ -363,6 +371,8 @@ class Storage final : public CommonStorage
     coro::task<> makeSingleTextureTask(coro::latch& latch, BindlessTablePtr table, ReadOnlyFilePtr file) override;
     coro::task<> makeMultiTextureTask(coro::latch& latch, BindlessTablePtr table,
                                       std::vector<ReadOnlyFilePtr> files) override;
+    coro::task<> makeMultiTextureTask(coro::latch& latch, BindlessTablePtr table,
+                                      std::vector<TextureStreamingMetadata> textures) override;
     coro::task<> makeBufferTask(coro::latch& latch, ReadOnlyFilePtr file, BufferPtr buffer, uint64_t fileLength,
                                 uint64_t fileOffset) override;
 };
@@ -420,6 +430,7 @@ class Device final : public IDevice
     void submitCommand(CommandPtr& command) override;
     void submitOneShot(const CommandPtr& command) override;
     void runGarbageCollection() override;
+    void beginFrame(uint32_t frameIndex) override;
 
     // clang-format off
     StoragePtr getStorage() override { return m_storage; }
@@ -447,6 +458,7 @@ class Device final : public IDevice
     vk::UniqueDevice m_device;
     vk::UniquePipelineCache m_pipelineCache;
     vk::UniqueDescriptorSetLayout m_bindlessLayout;
+    vk::UniqueDescriptorSetLayout m_constantLayout;
     std::shared_ptr<coro::thread_pool> m_threadPool;
     VulkanContext m_context;
     std::array<std::unique_ptr<Queue>, static_cast<uint32_t>(QueueType::Count)> m_queues;

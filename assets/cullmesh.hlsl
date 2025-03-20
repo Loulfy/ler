@@ -1,5 +1,8 @@
 #include "common.hlsli"
 
+#define FLT_MAX  3.402823466e+38f
+#define FLT_MIN -3.402823466e+38f
+
 struct Frustum
 {
     float4 planes[6];
@@ -44,6 +47,38 @@ bool isAABBinFrustum(Frustum frustum, float3 min, float3 max)
     return true;
 }
 
+void transformBoundingBox(float4x4 t, inout float3 bmin, inout float3 bmax)
+{
+    float3 pts[8] = {
+        float3(bmin.x, bmin.y, bmin.z),
+        float3(bmin.x, bmax.y, bmin.z),
+        float3(bmin.x, bmin.y, bmax.z),
+        float3(bmin.x, bmax.y, bmax.z),
+        float3(bmax.x, bmin.y, bmin.z),
+        float3(bmax.x, bmax.y, bmin.z),
+        float3(bmax.x, bmin.y, bmax.z),
+        float3(bmax.x, bmax.y, bmax.z)
+    };
+
+    // Transformation des 8 points
+    for (int i = 0; i < 8; i++)
+    {
+        float4 p = mul(t, float4(pts[i], 1.0f));
+        pts[i] = p.xyz / p.w; // Diviser par w si la transformation l'exige
+    }
+
+    // Réinitialisation des bornes
+    bmin = float3(FLT_MAX, FLT_MAX, FLT_MAX);
+    bmax = float3(FLT_MIN, FLT_MIN, FLT_MIN);
+
+    // Recalcul du min/max
+    for (int i = 0; i < 8; i++)
+    {
+        bmin = min(bmin, pts[i]);
+        bmax = max(bmax, pts[i]);
+    }
+}
+
 groupshared uint drawOffset;
 
 [numthreads(32, 1, 1)]
@@ -62,9 +97,12 @@ void CSMain(uint3 DTid : SV_DispatchThreadID, uint3 GTid : SV_GroupThreadID)
         Instance obj = props[instId];
         Mesh mesh = meshes[obj.meshId];
 
-        float4 mi = mul(obj.model, mesh.bbMin);
-        float4 ma = mul(obj.model, mesh.bbMax);
-        bDrawMesh = isAABBinFrustum(frustum, mi.xyz, ma.xyz);
+        //float4 mi = mul(obj.model, mesh.bbMin);
+        //float4 ma = mul(obj.model, mesh.bbMax);
+        float3 mi = mesh.bbMin.xyz;
+        float3 ma = mesh.bbMax.xyz;
+        transformBoundingBox(obj.model, mi, ma);
+        bDrawMesh = isAABBinFrustum(frustum, mi, ma);
         //bDrawMesh = true;
 
         uint drawMeshOffset = WavePrefixCountBits(bDrawMesh);

@@ -259,7 +259,8 @@ void BasePipeline::reflectPipelineLayout(vk::Device device, const std::span<Shad
         pushConstants.insert(pushConstants.end(), shader->pushConstants.begin(), shader->pushConstants.end());
     layoutInfo.setPushConstantRanges(pushConstants);
 
-    layoutInfo.setSetLayouts(m_context.bindlessLayout);
+    std::array<vk::DescriptorSetLayout, 2> descriptorSetLayout = { m_context.bindlessLayout, m_context.constantLayout };
+    layoutInfo.setSetLayouts(descriptorSetLayout);
     pipelineLayout = device.createPipelineLayoutUnique(layoutInfo);
 }
 
@@ -466,7 +467,7 @@ rhi::PipelinePtr Device::createGraphicsPipeline(const std::span<ShaderModule>& s
     std::vector<vk::PipelineColorBlendAttachmentState> colorBlendAttachments;
     vk::PipelineColorBlendAttachmentState pcb;
     pcb.setBlendEnable(VK_TRUE);                                    // false
-    pcb.setSrcColorBlendFactor(vk::BlendFactor::eOne);              // one //srcAlpha
+    pcb.setSrcColorBlendFactor(vk::BlendFactor::eSrcAlpha);              // one //srcAlpha
     pcb.setDstColorBlendFactor(vk::BlendFactor::eOneMinusSrcAlpha); // one //oneminussrcalpha
     pcb.setColorBlendOp(vk::BlendOp::eAdd);
     pcb.setSrcAlphaBlendFactor(vk::BlendFactor::eOne);  // one //oneminussrcalpha

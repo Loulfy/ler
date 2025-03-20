@@ -28,6 +28,8 @@ static bool gpuFilter(const vk::PhysicalDevice& phyDev)
 
 Device::~Device()
 {
+    for(auto& sb : m_context.scratchBufferPool)
+        sb.reset();
     m_storage.reset();
     vmaDestroyAllocator(m_context.allocator);
 }
@@ -78,7 +80,7 @@ VulkanFeatures getSupportedFeatures(const std::set<std::string>& supportedExtens
     if (supportedExtensionSet.contains(VK_EXT_MEMORY_PRIORITY_EXTENSION_NAME))
         features.memoryPriority = true;
     if (supportedExtensionSet.contains(VK_KHR_PIPELINE_BINARY_EXTENSION_NAME))
-        features.binaryPipeline = true;
+        features.binaryPipeline = false;
     if (supportedExtensionSet.contains(VK_EXT_MUTABLE_DESCRIPTOR_TYPE_EXTENSION_NAME))
         features.mutableDescriptor = true;
     if (supportedExtensionSet.contains(VK_EXT_DESCRIPTOR_BUFFER_EXTENSION_NAME))
@@ -178,7 +180,7 @@ void unlinkUnsupportedFeatures(InfoChain& createInfoChain, const VulkanFeatures&
 
 Device::Device(const DeviceConfig& config)
 {
-    static const vk::detail::DynamicLoader dl;
+    static const vk::DynamicLoader dl;
     const auto vkGetInstanceProcAddr = dl.getProcAddress<PFN_vkGetInstanceProcAddr>("vkGetInstanceProcAddr");
     VULKAN_HPP_DEFAULT_DISPATCHER.init(vkGetInstanceProcAddr);
 
@@ -379,8 +381,10 @@ Device::Device(const DeviceConfig& config)
     m_context.debug = config.debug;
 
     m_bindlessLayout = BindlessTable::buildBindlessLayout(m_context, 1024);
+    m_constantLayout = BindlessTable::buildConstantLayout(m_context);
     m_context.descBufferProperties = pp.get<vk::PhysicalDeviceDescriptorBufferPropertiesEXT>();
     m_context.bindlessLayout = m_bindlessLayout.get();
+    m_context.constantLayout = m_constantLayout.get();
 
     m_context.hostBuffer = config.hostBuffer;
     m_context.hostPointerAlignment =
@@ -388,6 +392,9 @@ Device::Device(const DeviceConfig& config)
 
     m_queues[static_cast<int>(QueueType::Graphics)] = std::make_unique<Queue>(m_context, QueueType::Graphics);
     m_queues[static_cast<int>(QueueType::Transfer)] = std::make_unique<Queue>(m_context, QueueType::Transfer);
+
+    for(std::unique_ptr<ScratchBuffer>& scratchBuffer : m_context.scratchBufferPool)
+        scratchBuffer = std::make_unique<ScratchBuffer>(this);
 
     m_threadPool = std::make_shared<coro::thread_pool>(coro::thread_pool::options{ .thread_count = 8 });
 

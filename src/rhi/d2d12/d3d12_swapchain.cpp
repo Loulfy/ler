@@ -44,6 +44,7 @@ SwapChainPtr Device::createSwapChain(GLFWwindow* window, bool vsync)
 
     swapChain->createNativeSync();
     swapChain->resize(width, height, vsync);
+    swapChain->device = this;
 
     return swapChain;
 }
@@ -54,7 +55,7 @@ void SwapChain::createNativeSync()
 
     for (UINT n = 0; n < SwapChain::FrameCount; ++n)
     {
-        auto command = std::make_shared<Command>();
+        auto command = std::make_shared<Command>(m_context);
 
         // Command
         command->m_gpuHeap = m_context.descriptorPool[D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV].get();
@@ -164,6 +165,9 @@ Format SwapChain::format() const
 
 uint32_t SwapChain::present(const RenderPass& renderPass)
 {
+    // Notify Frame Start
+    device->beginFrame(m_frameIndex);
+
     m_command[m_frameIndex]->reset();
 
     renderPass(m_images[m_frameIndex], m_command[m_frameIndex]);

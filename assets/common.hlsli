@@ -1,7 +1,7 @@
 #pragma pack_matrix(column_major)
 
 #ifdef __spirv__
-#define VkPush [[vk::push_constant]]
+#define VkPush [[vk::binding(0, 1)]]
 #else
 #define VkPush
 #endif
@@ -12,6 +12,15 @@ struct Instance
     uint meshId;
     uint skinId;
     float2 pad;
+};
+
+struct Material
+{
+    uint4 tex;
+    uint alphaMode;
+    float3 baseColor;
+    float alphaCutOff;
+    uint3 pad;
 };
 
 struct Mesh

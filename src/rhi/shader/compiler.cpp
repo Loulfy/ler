@@ -21,7 +21,7 @@ using json = nlohmann::json;
 
 namespace ler::rhi
 {
-//using Microsoft::WRL::ComPtr;
+// using Microsoft::WRL::ComPtr;
 
 struct KindMapping
 {
@@ -141,24 +141,23 @@ static void compileShaderHlsl(const ShaderModule& shaderModule, const fs::path& 
     DxcCreateInstance(CLSID_DxcCompiler, IID_PPV_ARGS(&compiler));
     utils->CreateDefaultIncludeHandler(&includeHandler);
 
-    std::vector<LPCWSTR> compilationArguments{
-        // DXC_ARG_PACK_MATRIX_ROW_MAJOR,
-        DXC_ARG_WARNINGS_ARE_ERRORS,
-        DXC_ARG_ALL_RESOURCES_BOUND,
-        L"-Qembed_debug",
-        L"-fspv-extension=SPV_KHR_ray_tracing",
-        L"-fspv-extension=SPV_KHR_multiview",
-        L"-fspv-extension=SPV_KHR_shader_draw_parameters",
-        L"-fspv-extension=SPV_EXT_descriptor_indexing",
-        L"-fspv-extension=SPV_KHR_ray_query",
-        L"-fspv-target-env=vulkan1.3"
+    std::vector<LPCWSTR> compilationArguments{ // DXC_ARG_PACK_MATRIX_ROW_MAJOR,
+                                               DXC_ARG_WARNINGS_ARE_ERRORS,
+                                               DXC_ARG_ALL_RESOURCES_BOUND,
+                                               L"-Qembed_debug",
+                                               L"-fspv-extension=SPV_KHR_ray_tracing",
+                                               L"-fspv-extension=SPV_KHR_multiview",
+                                               L"-fspv-extension=SPV_KHR_shader_draw_parameters",
+                                               L"-fspv-extension=SPV_EXT_descriptor_indexing",
+                                               L"-fspv-extension=SPV_KHR_ray_query",
+                                               L"-fspv-target-env=vulkan1.3"
     };
 
     compilationArguments.push_back(DXC_ARG_DEBUG);
     // compilationArguments.push_back(DXC_ARG_OPTIMIZATION_LEVEL3);
 
     uint32_t defineCount = 0;
-    DxcDefine spirv(L"VK", L"1");
+    DxcDefine spirv(L"__spirv__", L"1");
     if (output.extension() == ".spv")
     {
         compilationArguments.push_back(L"-spirv");
@@ -178,9 +177,9 @@ static void compileShaderHlsl(const ShaderModule& shaderModule, const fs::path& 
 
     // Compile the shader.
     RefPtr<IDxcOperationResult> result;
-    hr = compiler->Compile(
-        sourceBlob.Get(), source.c_str(), entryPoint.c_str(), targetProfile.c_str(), compilationArguments.data(),
-        static_cast<uint32_t>(compilationArguments.size()), &spirv, defineCount, includeHandler.Get(), &result);
+    hr = compiler->Compile(sourceBlob.Get(), source.c_str(), entryPoint.c_str(), targetProfile.c_str(),
+                           compilationArguments.data(), static_cast<uint32_t>(compilationArguments.size()), &spirv,
+                           defineCount, includeHandler.Get(), &result);
     if (FAILED(hr))
     {
         log::error("Failed to compile shader with path : {}", shaderModule.path.string());
@@ -204,7 +203,8 @@ static void compileShaderHlsl(const ShaderModule& shaderModule, const fs::path& 
     file.close();
 }
 
-static bool compile(glslang::TShader* shader, const std::string& code, EShMessages controls, const std::string& shaderName, const std::string& entryPointName)
+static bool compile(glslang::TShader* shader, const std::string& code, EShMessages controls,
+                    const std::string& shaderName, const std::string& entryPointName)
 {
     const char* shaderStrings = code.c_str();
     const int shaderLengths = static_cast<int>(code.size());
@@ -244,7 +244,7 @@ static void compileShaderGlsl(const ShaderModule& shaderModule, const fs::path& 
     shader.setEnvTarget(glslang::EShTargetLanguage::EShTargetSpv, glslang::EShTargetLanguageVersion::EShTargetSpv_1_5);
     success &= compile(&shader, code, controls, shaderModule.name, shaderModule.entryPoint);
 
-    if(!success)
+    if (!success)
     {
         log::error(shader.getInfoLog());
         return;
@@ -255,7 +255,7 @@ static void compileShaderGlsl(const ShaderModule& shaderModule, const fs::path& 
     program.addShader(&shader);
     success &= program.link(controls);
 
-    if(!success)
+    if (!success)
     {
         log::error(program.getInfoLog());
         return;
@@ -264,13 +264,13 @@ static void compileShaderGlsl(const ShaderModule& shaderModule, const fs::path& 
     glslang::SpvOptions options;
     spv::SpvBuildLogger logger;
     std::vector<uint32_t> spv;
-    //options.disableOptimizer = false;
-    //options.optimizeSize = true;
+    // options.disableOptimizer = false;
+    // options.optimizeSize = true;
     options.stripDebugInfo = false;
     options.emitNonSemanticShaderDebugInfo = true;
     options.emitNonSemanticShaderDebugSource = true;
     glslang::GlslangToSpv(*program.getIntermediate(shader.getStage()), spv, &logger, &options);
-    if(!logger.getAllMessages().empty())
+    if (!logger.getAllMessages().empty())
         log::error(logger.getAllMessages());
 
     std::ofstream file(output, std::ios::out | std::ios::binary);
@@ -281,9 +281,9 @@ static void compileShaderGlsl(const ShaderModule& shaderModule, const fs::path& 
 
 void IDevice::compileShader(const ShaderModule& shaderModule, const fs::path& output)
 {
-    if(shaderModule.path.extension() == ".hlsl")
+    if (shaderModule.path.extension() == ".hlsl")
         compileShaderHlsl(shaderModule, output);
-    if(shaderModule.path.extension() == ".glsl")
+    if (shaderModule.path.extension() == ".glsl")
         compileShaderGlsl(shaderModule, output);
 }
 
@@ -315,7 +315,7 @@ void IDevice::shaderAutoCompile()
             break;
         }
 
-        if(fs::exists(f) && fs::last_write_time(f) > fs::last_write_time(sys::ASSETS_DIR / entry))
+        if (fs::exists(f) && fs::last_write_time(f) > fs::last_write_time(sys::ASSETS_DIR / entry))
             continue;
 
         log::warn("Compile shader: {} to {}", entry.string(), f.string());

@@ -19,8 +19,13 @@ CommonStorage::CommonStorage(IDevice* device, std::shared_ptr<coro::thread_pool>
 
 void CommonStorage::update()
 {
-    // if (m_scheduler.empty())
-    //   m_memory.release();
+    sys::PathHash hash;
+    TextureStreamingBatch batch;
+    while (m_dispatcher.dequeue(batch))
+    {
+        for (auto& e : batch)
+            m_resources[hash(e.stem)] = e.view;
+    }
 }
 
 std::vector<ReadOnlyFilePtr> CommonStorage::openFiles(const fs::path& path, const fs::path& ext)
@@ -79,26 +84,20 @@ void CommonStorage::requestLoadBuffer(coro::latch& latch, const ReadOnlyFilePtr&
 
 void CommonStorage::requestOpenTexture(coro::latch& latch, BindlessTablePtr& table, const std::span<fs::path>& paths)
 {
-    std::vector fileList(paths.begin(), paths.end());
-    m_scheduler.spawn(makeOpenTextureTask(latch, table, std::move(fileList)));
-}
-
-coro::task<> CommonStorage::makeOpenTextureTask(coro::latch& latch, BindlessTablePtr& table,
-                                                std::vector<fs::path> paths)
-{
-    int i = 0;
+    int batchCount = 0;
     uint64_t totalByteSizes = 0;
+    std::list<std::vector<ReadOnlyFilePtr>> ranges;
     std::vector<ReadOnlyFilePtr> files;
     for (const fs::path& p : paths)
     {
         ReadOnlyFilePtr file = openFile(p);
         static constexpr uint64_t alignment = 16;
-        const uint64_t byteSizes = align(file->sizeInBytes(), alignment);
+        const uint64_t byteSizes = file->sizeInBytes();
         if (totalByteSizes + byteSizes > kStagingSize)
         {
-            m_scheduler.spawn(makeMultiTextureTask(latch, table, std::move(files)));
+            ranges.emplace_back(std::move(files));
             totalByteSizes = 0;
-            ++i;
+            ++batchCount;
         }
 
         totalByteSizes += byteSizes;
@@ -107,13 +106,47 @@ coro::task<> CommonStorage::makeOpenTextureTask(coro::latch& latch, BindlessTabl
 
     if (!files.empty())
     {
-        m_scheduler.spawn(makeMultiTextureTask(latch, table, std::move(files)));
-        ++i;
+        ranges.emplace_back(std::move(files));
+        ++batchCount;
     }
 
-    log::info("Requested {} bundles", i);
+    log::info("[OpenTexture] Requested {} tasks ({} files)", batchCount, paths.size());
 
-    co_return;
+    for (std::vector<ReadOnlyFilePtr>& f : ranges)
+        m_scheduler.spawn(makeMultiTextureTask(latch, table, std::move(f)));
+}
+
+void CommonStorage::requestLoadTexture(coro::latch& latch, BindlessTablePtr& table,
+                                       const std::span<TextureStreamingMetadata>& textures)
+{
+    int batchCount = 0;
+    uint64_t totalByteSizes = 0;
+    std::list<std::vector<TextureStreamingMetadata>> ranges;
+    std::vector<TextureStreamingMetadata> files;
+    for (const TextureStreamingMetadata& metadata : textures)
+    {
+        const uint64_t byteSizes = metadata.byteLength;
+        if (totalByteSizes + byteSizes > kStagingSize)
+        {
+            ranges.emplace_back(std::move(files));
+            totalByteSizes = 0;
+            ++batchCount;
+        }
+
+        totalByteSizes += byteSizes;
+        files.emplace_back(metadata);
+    }
+
+    if (!textures.empty())
+    {
+        ranges.emplace_back(std::move(files));
+        ++batchCount;
+    }
+
+    log::info("[OpenTexture] Requested {} tasks ({} files)", batchCount, textures.size());
+
+    for (std::vector<TextureStreamingMetadata>& f : ranges)
+        m_scheduler.spawn(makeMultiTextureTask(latch, table, std::move(f)));
 }
 
 void CommonStorage::releaseStaging(uint32_t index)
@@ -134,12 +167,11 @@ coro::task<int> CommonStorage::acquireStaging()
     co_return idx;
 }
 
-CommonStorage::ReSchedule::ReSchedule(CommonStorage& storage) : m_storage(storage)
+std::expected<ResourceViewPtr, StorageError> CommonStorage::getResource(uint64_t pathKey)
 {
-}
-
-void CommonStorage::ReSchedule::await_suspend(std::coroutine_handle<> handle) const noexcept
-{
-    m_storage.m_scheduler.resume(handle);
+    if (m_resources.contains(pathKey))
+        return m_resources.at(pathKey);
+    else
+        return std::unexpected(StorageError());
 }
 } // namespace ler::rhi
