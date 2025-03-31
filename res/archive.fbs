@@ -41,8 +41,11 @@ struct Material {
     shading:ShadingMode;
     alpha_mode:AlphaMode;
     alpha_cut_off:float;
-    // emissive_color:Vec3;
     base_color:Vec3;
+    emissive_color:Vec3;
+    metallic_factor:float;
+    roughness_factor:float;
+    opacity:float;
     texture:[uint64:6];
     // 0: normal
     // 1: diffuse
