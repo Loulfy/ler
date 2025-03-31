@@ -101,6 +101,10 @@
       "platform": "linux"
     },
     {
+      "name": "argparse",
+      "version>=": "3.2"
+    },
+    {
       "name": "vcpkg-pkgconfig-get-modules",
       "version>=": "2024-04-03"
     },
