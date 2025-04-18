@@ -205,7 +205,8 @@ class RenderGraphPass
     virtual void render(rhi::CommandPtr& cmd, const RenderParams& params, RenderGraphTable& res) = 0;
     [[nodiscard]] virtual rhi::PipelinePtr getPipeline() const = 0;
     [[nodiscard]] virtual std::string getName() const = 0;
-    virtual void createRenderResource(const rhi::DevicePtr& device, const RenderParams& params, RenderGraphTable& res) = 0;
+    virtual void createRenderResource(const rhi::DevicePtr& device, const RenderParams& params,
+                                      RenderGraphTable& res) = 0;
 };
 
 struct RenderGraphNode
@@ -223,12 +224,26 @@ class RenderGraph : public rhi::IRenderPass, public render::IMeshRenderer
 {
   public:
 
+    void parse();
+    void updateParams(RenderParams params) override;
     void create(const rhi::DevicePtr& device, const rhi::SwapChainPtr& swapChain) override;
     void render(rhi::TexturePtr& backBuffer, rhi::CommandPtr& command) override;
-    void render(rhi::TexturePtr& backBuffer, rhi::CommandPtr& command, const RenderParams& params) override;
+
+    template <typename T> void addPass()
+    {
+        auto pass = std::make_unique<T>();
+        for (RenderGraphNode& node : m_nodes)
+        {
+            if (node.name == pass->getName())
+            {
+                node.pass = std::move(pass);
+                return;
+            }
+        }
+    }
 
   private:
-
+    render::RenderParams m_params;
     std::vector<RenderGraphNode> m_nodes;
     rhi::BindlessTablePtr m_table;
 

@@ -113,6 +113,9 @@
       "version>=": "1.91.0",
       "features": [
         {
+          "name": "docking-experimental"
+        },
+        {
           "name": "glfw-binding"
         },
         {

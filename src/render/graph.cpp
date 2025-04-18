@@ -416,11 +416,64 @@ rhi::BufferPtr getBufferOutput(const RenderGraphTable& res, uint32_t id)
     return std::get<rhi::BufferPtr>(res.outputs[id].resource);
 }
 
-void RenderGraph::create(const rhi::DevicePtr& device, const rhi::SwapChainPtr& swapChain)
+void RenderGraph::parse()
 {
+    {
+        RenderGraphNode& node = m_nodes.emplace_back();
+        node.type = RP_Compute;
+        node.name = "AcquireNextFrame";
+        node.index = 0;
+
+        RenderGraphTable& res = node.resources;
+        res.outputs.emplace_back();
+        res.outputs.back().name = "backBuffer";
+        res.outputs.back().type = render::RR_RenderTarget;
+        res.outputs.back().linkGroup = 42;
+    }
+
+    {
+        RenderGraphNode& node = m_nodes.emplace_back();
+        node.type = RP_Compute;
+        node.name = "Present";
+        node.index = 1;
+
+        RenderGraphTable& res = node.resources;
+        res.inputs.emplace_back();
+        res.inputs.back().name = "backBuffer";
+        res.inputs.back().type = render::RR_RenderTarget;
+        res.inputs.back().linkGroup = 16;
+    }
+
+    {
+        RenderGraphNode& node = m_nodes.emplace_back();
+        node.name = "ForwardIndexed";
+        node.index = 2;
+
+        RenderGraphTable& res = node.resources;
+        res.inputs.emplace_back();
+        res.inputs.back().name = "backBuffer";
+        res.inputs.back().type = render::RR_RenderTarget;
+        res.inputs.back().linkGroup = 42;
+
+        res.outputs.emplace_back();
+        res.outputs.back().name = "backBuffer";
+        res.outputs.back().type = render::RR_RenderTarget;
+        res.outputs.back().linkGroup = 16;
+    }
+
+    for (auto& node : m_nodes)
+        computeEdges(node);
+    topologicalSort();
+    for (RenderGraphNode& node : m_nodes)
+        log::info("[RenderGraph] Create Node: {}", node.name);
 }
 
-void RenderGraph::render(rhi::TexturePtr& backBuffer, rhi::CommandPtr& command)
+void RenderGraph::updateParams(RenderParams params)
+{
+    m_params = std::move(params);
+}
+
+void RenderGraph::create(const rhi::DevicePtr& device, const rhi::SwapChainPtr& swapChain)
 {
 }
 
@@ -461,7 +514,7 @@ void RenderGraph::applyBarrier(rhi::CommandPtr& cmd, const RenderNode& desc, rhi
     }
 }
 
-void RenderGraph::render(rhi::TexturePtr& backBuffer, rhi::CommandPtr& command, const RenderParams& params)
+void RenderGraph::render(rhi::TexturePtr& backBuffer, rhi::CommandPtr& command)
 {
     for (size_t i = 0; i < m_nodes.size(); ++i)
     {
@@ -494,7 +547,7 @@ void RenderGraph::render(rhi::TexturePtr& backBuffer, rhi::CommandPtr& command, 
         {
             if (node.pass->getPipeline())
                 command->bindPipeline(node.pass->getPipeline(), m_table, nullptr);
-            node.pass->render(command, params, node.resources);
+            node.pass->render(command, m_params, node.resources);
         }
 
         // End Pass
@@ -504,30 +557,20 @@ void RenderGraph::render(rhi::TexturePtr& backBuffer, rhi::CommandPtr& command, 
     }
 }
 
-static bool isRoot(RenderGraphNode& root, const RenderNode& renderNode)
-{
-    for (auto& in : root.resources.inputs)
-    {
-        if (in.resource == renderNode.resource)
-            return true;
-    }
-    return false;
-}
-
 void RenderGraph::computeEdges(RenderGraphNode& node)
 {
     for (const RenderNode& renderNode : node.resources.inputs)
     {
-        // if (guessOutput(desc))
-        // continue;
-
         for (auto& parent : m_nodes)
         {
-            if (isRoot(parent, renderNode) &&
-                std::find(parent.edges.begin(), parent.edges.end(), &node) == parent.edges.end())
+            for (auto& res : parent.resources.outputs)
             {
-                parent.edges.emplace_back(&node);
-                break;
+                if (res.linkGroup == renderNode.linkGroup &&
+                    std::find(parent.edges.begin(), parent.edges.end(), &node) == parent.edges.end())
+                {
+                    parent.edges.emplace_back(&node);
+                    break;
+                }
             }
         }
     }

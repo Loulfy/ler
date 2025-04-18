@@ -93,6 +93,8 @@ set(SRC
     "src/render/mesh.cpp"
     "src/render/graph.hpp"
     "src/render/graph.cpp"
+    "src/render/graph_editor.hpp"
+    "src/render/graph_editor.cpp"
     #"src/scene/scene.hpp"
     #"src/scene/scene.cpp"
     "src/pass/forward_indexed.hpp"

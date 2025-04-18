@@ -4,6 +4,8 @@
 
 #pragma once
 
+#include <utility>
+
 #include "mesh_list.hpp"
 
 namespace ler::render
@@ -18,11 +20,17 @@ class IRenderer
     [[nodiscard]] virtual std::string getName() const = 0;
 };
 
-class IMeshRenderer
+/*class IMeshRenderer
 {
   public:
     virtual ~IMeshRenderer() = default;
     virtual void create(const rhi::DevicePtr& device, const rhi::SwapChainPtr& swapChain, const RenderParams& params) = 0;
     virtual void render(rhi::TexturePtr& backBuffer, rhi::CommandPtr& command, const RenderParams& params) = 0;
+};*/
+
+class IMeshRenderer
+{
+  public:
+    virtual void updateParams(render::RenderParams params) = 0;
 };
 } // namespace ler::render

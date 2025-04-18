@@ -98,25 +98,18 @@
         "backend": "vulkan"
     },
     {
-      "name": "wireframe",
-      "path": "wireframe.frag.glsl",
-      "entryPoint": "main",
-      "stage": "Pixel",
-      "backend": "vulkan"
-    },
-    {
-      "name": "wireframe",
-      "path": "wireframe.vert.glsl",
-      "entryPoint": "main",
-      "stage": "Vertex",
-      "backend": "vulkan"
+      "name": "cullmesh",
+      "path": "cullmesh.hlsl",
+      "entryPoint": "CSMain",
+      "stage": "Compute",
+      "backend": "d3d12"
     },
     {
       "name": "cullmesh",
       "path": "cullmesh.hlsl",
       "entryPoint": "CSMain",
       "stage": "Compute",
-      "backend": "d3d12"
+      "backend": "vulkan"
     },
     {
       "name": "indirectmesh",
@@ -131,5 +124,19 @@
       "entryPoint": "PSMain",
       "stage": "Pixel",
       "backend": "d3d12"
+    },
+    {
+      "name": "indirectmesh",
+      "path": "indirectmesh.hlsl",
+      "entryPoint": "VSMain",
+      "stage": "Vertex",
+      "backend": "vulkan"
+    },
+    {
+      "name": "indirectmesh",
+      "path": "indirectmesh.hlsl",
+      "entryPoint": "PSMain",
+      "stage": "Pixel",
+      "backend": "vulkan"
     }
 ]

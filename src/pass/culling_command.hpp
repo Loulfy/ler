@@ -25,9 +25,8 @@ class CullingCommand : public render::RenderGraphPass
 
     void create(const rhi::DevicePtr& device) override
     {
-        rhi::ShaderModule shaderModule("cached/cull.comp", "CSMain", rhi::ShaderType::Compute);
+        rhi::ShaderModule shaderModule("cached/cullmesh.comp", "CSMain", rhi::ShaderType::Compute);
         pipeline = device->createComputePipeline(shaderModule);
-        int ii=42;
     }
 
     void resize(const rhi::DevicePtr& device, const rhi::Extent& viewport) override
@@ -78,14 +77,14 @@ class CullingCommand : public render::RenderGraphPass
         res.outputs.emplace_back();
         res.outputs.back().name = "drawBuffer";
         res.outputs.back().type = render::RR_StorageBuffer;
-        desc.sizeInBytes = sizeof(render::DrawCommand) * params.meshList->getInstanceCount();
-        res.outputs.back().resource = device->createBuffer(desc);
+        //desc.sizeInBytes = sizeof(render::DrawCommand) * params.meshList->getInstanceCount();
+        //res.outputs.back().resource = device->createBuffer(desc);
 
         res.outputs.emplace_back();
         res.outputs.back().name = "countBuffer";
         res.outputs.back().type = render::RR_StorageBuffer;
-        desc.sizeInBytes = 16;
-        res.outputs.back().resource = device->createBuffer(desc);
+        //desc.sizeInBytes = 16;
+        //res.outputs.back().resource = device->createBuffer(desc);
 
         res.inputs.emplace_back();
         res.inputs.back().name = "camera";

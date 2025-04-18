@@ -6,6 +6,7 @@
 #include "pass/deferred_scene.hpp"
 #include "render/pass.hpp"
 #include "render/resource_mgr.hpp"
+#include "render/graph_editor.hpp"
 
 using namespace ler;
 
@@ -120,6 +121,12 @@ class TestForward final : public rhi::IRenderPass, public render::IMeshRenderer
   public:
     rhi::PipelinePtr pipeline;
     rhi::TexturePtr depth;
+    render::RenderParams params;
+
+    void updateParams(render::RenderParams pparams) override
+    {
+        params = std::move(pparams);
+    }
 
     void create(const rhi::DevicePtr& device, const rhi::SwapChainPtr& swapChain) override
     {
@@ -155,7 +162,7 @@ class TestForward final : public rhi::IRenderPass, public render::IMeshRenderer
         async::sync_wait(*latch);
     }
 
-    void render(rhi::TexturePtr& backBuffer, rhi::CommandPtr& command, const render::RenderParams& params) override
+    void render(rhi::TexturePtr& backBuffer, rhi::CommandPtr& command) override
     {
         render::RenderMeshList* meshList = params.meshList;
         ImGui::Begin("Hello MoltenVK", nullptr, ImGuiWindowFlags_NoResize);
@@ -194,16 +201,6 @@ class TestForward final : public rhi::IRenderPass, public render::IMeshRenderer
         //command->drawIndirectIndexed(pipeline, drawsBuffer, countBuffer, meshList.getInstanceCount(), sizeof(render::DrawCommand));
         command->endRendering();
     }
-
-    void create(const rhi::DevicePtr& device, const rhi::SwapChainPtr& swapChain, const render::RenderParams& params) override
-    {
-
-    }
-
-    void render(rhi::TexturePtr& backBuffer, rhi::CommandPtr& command) override
-    {
-
-    }
 };
 
 class TestIndirect final : public rhi::IRenderPass, public render::IMeshRenderer
@@ -235,7 +232,12 @@ class TestIndirect final : public rhi::IRenderPass, public render::IMeshRenderer
 
     rhi::BufferPtr drawConstant;
     rhi::BufferPtr cullConstant;
+    render::RenderParams params;
 
+    void updateParams(render::RenderParams pparams) override
+    {
+        params = std::move(pparams);
+    }
 
     void create(const rhi::DevicePtr& device, const rhi::SwapChainPtr& swapChain) override
     {
@@ -254,6 +256,7 @@ class TestIndirect final : public rhi::IRenderPass, public render::IMeshRenderer
         pso.depthAttach = rhi::Format::D32;
         pso.indirectDraw = true;
         pipeline = device->createGraphicsPipeline(modules, pso);
+        createTwo(device, swapChain);
     }
 
     void resize(const rhi::DevicePtr& device, const rhi::Extent& viewport) override
@@ -305,7 +308,7 @@ class TestIndirect final : public rhi::IRenderPass, public render::IMeshRenderer
     static constexpr std::array<uint32_t,4> kPattern = {0, 0, 1, 1};
     static constexpr std::span<const uint32_t> kClearer = kPattern;
 
-    void render(rhi::TexturePtr& backBuffer, rhi::CommandPtr& command, const render::RenderParams& params) override
+    void render(rhi::TexturePtr& backBuffer, rhi::CommandPtr& command) override
     {
         render::RenderMeshList* meshList = params.meshList;
 
@@ -454,13 +457,12 @@ class TestIndirect final : public rhi::IRenderPass, public render::IMeshRenderer
         command->endRendering();*/
     }
 
-    void render(rhi::TexturePtr& backBuffer, rhi::CommandPtr& command) override
+    /*void render(rhi::TexturePtr& backBuffer, rhi::CommandPtr& command) override
     {
 
-    }
+    }*/
 
-    void create(const rhi::DevicePtr& device, const rhi::SwapChainPtr& swapChain,
-                const render::RenderParams& params) override
+    void createTwo(const rhi::DevicePtr& device, const rhi::SwapChainPtr& swapChain)
     {
         render::RenderMeshList* meshList = params.meshList;
         rhi::BufferDesc buffDesc;
@@ -540,7 +542,7 @@ int main()
     cfg.debug = true;
     cfg.width = 1080;
     cfg.height = 720;
-    cfg.api = rhi::GraphicsAPI::VULKAN;
+    cfg.api = rhi::GraphicsAPI::D3D12;
     cfg.vsync = true;
     app::DesktopApp app(cfg);
     app.loadScene(sys::ASSETS_DIR / "fat.pak");
@@ -550,12 +552,15 @@ int main()
     // app.addPass<HelloTriangle>();
     // app.addPass<TestLoadMultiTex>();
     // app.addPass<TestLoadOneTex>();
-    app.addPass<TestIndirect>();
+    // app.addPass<TestIndirect>();
     // app.renderGraph().parse("wireframe.json");
     // app.renderGraph().addPass<pass::ForwardIndexed>();
     // app.renderGraph().addPass<pass::CullingCommand>();
 
+    app.addPass<render::FrameGraphEditor>();
+
     //render::RenderGraphPtr graph = app.addPass<render::RenderGraph>();
+    //graph->parse();
     //graph->parse("test_graph.json");
     // graph->addPass<pass::ForwardIndexed>();
     //graph->addPass<pass::CullingCommand>();

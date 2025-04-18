@@ -26,6 +26,7 @@ class DeferredScene final : public rhi::IRenderPass, public render::IMeshRendere
 
     rhi::RenderingInfo pass;
     render::MeshBuffers* meshes = nullptr;
+    render::RenderParams m_params;
 
     struct CullResource
     {
@@ -71,8 +72,7 @@ class DeferredScene final : public rhi::IRenderPass, public render::IMeshRendere
     }
 
   public:
-    void create(const rhi::DevicePtr& device, const rhi::SwapChainPtr& swapChain,
-                const render::RenderParams& params) override
+    void create(const rhi::DevicePtr& device, const rhi::SwapChainPtr& swapChain) override
     {
         m_table = device->createBindlessTable(128);
 
@@ -112,7 +112,7 @@ class DeferredScene final : public rhi::IRenderPass, public render::IMeshRendere
 
         desc.stride = sizeof(render::DrawCommand);
         desc.debugName = "drawBuffer";
-        desc.sizeInBytes = desc.stride * params.meshList->getInstanceCount();
+        desc.sizeInBytes = desc.stride * m_params.meshList->getInstanceCount();
         m_drawBuffer = device->createBuffer(desc);
 
         desc.isUAV = false;
@@ -133,7 +133,7 @@ class DeferredScene final : public rhi::IRenderPass, public render::IMeshRendere
         clears.fill(0u);
         m_test->uploadFromMemory(clears.data(), 16);
 
-        meshes = params.meshList->getMeshBuffers();
+        meshes = m_params.meshList->getMeshBuffers();
 
         /*m_cullRes.countIndex = m_table->appendResource(m_countBuffer);
         m_cullRes.drawIndex = m_table->appendResource(m_drawBuffer);
@@ -147,7 +147,7 @@ class DeferredScene final : public rhi::IRenderPass, public render::IMeshRendere
         pass.depth.texture = m_depth;
         pass.colorCount = 1;
     }
-    void render(rhi::TexturePtr& backBuffer, rhi::CommandPtr& command, const render::RenderParams& params) override
+    void render(rhi::TexturePtr& backBuffer, rhi::CommandPtr& command) override
     {
         uint32_t count;
         m_readBack->getUint(&count);
@@ -157,9 +157,9 @@ class DeferredScene final : public rhi::IRenderPass, public render::IMeshRendere
         ImGui::End();
 
         render::Frustum frustum{};
-        frustum.num = params.meshList->getInstanceCount();
-        getFrustumPlanes(params.proj * params.view, frustum.planes);
-        getFrustumCorners(params.proj * params.view, frustum.corners);
+        frustum.num = m_params.meshList->getInstanceCount();
+        getFrustumPlanes(m_params.proj * m_params.view, frustum.planes);
+        getFrustumCorners(m_params.proj * m_params.view, frustum.corners);
         m_upload->uploadFromMemory(&frustum, sizeof(render::Frustum));
 
         command->beginDebugEvent("DeferredPass", rhi::Color::Gray);
@@ -177,7 +177,7 @@ class DeferredScene final : public rhi::IRenderPass, public render::IMeshRendere
 
         command->bindPipeline(m_cullPass, m_table, nullptr);
         command->pushConstant(m_cullPass, rhi::ShaderType::Compute, 0, &m_cullRes, sizeof(CullResource));
-        command->dispatch(1 + params.meshList->getInstanceCount() / 32, 1, 1);
+        command->dispatch(1 + m_params.meshList->getInstanceCount() / 32, 1, 1);
 
         command->addBufferBarrier(m_countBuffer, rhi::CopySrc);
         //command->addBufferBarrier(m_staging, rhi::CopyDest);
@@ -193,8 +193,8 @@ class DeferredScene final : public rhi::IRenderPass, public render::IMeshRendere
         };
 
         test data;
-        data.proj = params.proj;
-        data.view = params.view;
+        data.proj = m_params.proj;
+        data.view = m_params.view;
         data.bound = m_cullRes.propIndex;
 
         command->bindPipeline(m_wirePass, m_table, nullptr);
@@ -203,17 +203,12 @@ class DeferredScene final : public rhi::IRenderPass, public render::IMeshRendere
         pass.colors[0].texture = backBuffer;
         command->beginRendering(pass);
         meshes->bind(command, false);
-        command->drawIndirectIndexedPrimitives(m_wirePass, m_drawBuffer, m_countBuffer, params.meshList->getInstanceCount(),
+        command->drawIndirectIndexedPrimitives(m_wirePass, m_drawBuffer, m_countBuffer, m_params.meshList->getInstanceCount(),
                                      sizeof(render::DrawCommand));
         command->endRendering();
         command->endDebugEvent();
     }
-    void create(const rhi::DevicePtr& device, const rhi::SwapChainPtr& swapChain) override
-    {
-    }
-    void render(rhi::TexturePtr& backBuffer, rhi::CommandPtr& command) override
-    {
-    }
+
     void resize(const rhi::DevicePtr& device, const rhi::Extent& viewport) override
     {
     }

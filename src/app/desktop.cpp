@@ -78,7 +78,7 @@ DesktopApp::DesktopApp(AppConfig cfg)
     ImGuiIO& io = ImGui::GetIO();
     glfwGetFramebufferSize(m_window, &w, &h);
     io.DisplaySize = ImVec2(static_cast<float>(w), static_cast<float>(h));
-    // io.ConfigFlags = ImGuiConfigFlags_DockingEnable;
+    io.ConfigFlags = ImGuiConfigFlags_DockingEnable;
     ImGui::StyleColorsDark();
 
     m_table = m_device->createBindlessTable(1024);
@@ -121,13 +121,7 @@ void DesktopApp::resize(int width, int height)
 struct EmptyMeshRenderer final : public render::IMeshRenderer
 {
   public:
-    void create(const rhi::DevicePtr& device, const rhi::SwapChainPtr& swapChain,
-                const render::RenderParams& params) override
-    {
-    }
-    void render(rhi::TexturePtr& backBuffer, rhi::CommandPtr& command, const render::RenderParams& params) override
-    {
-    }
+    void updateParams(render::RenderParams params) override {}
 };
 
 void DesktopApp::run()
@@ -164,13 +158,13 @@ void DesktopApp::run()
             graph->addResource("meshes", m_meshBuffers.getMeshBuffer());
         }*/
 
-        pass->create(m_device, m_swapChain);
         auto* renderer = dynamic_cast<render::IMeshRenderer*>(pass.get());
         if (renderer == nullptr)
             m_meshRenderer.emplace_back(new EmptyMeshRenderer);
         else
             m_meshRenderer.emplace_back(renderer);
-        m_meshRenderer.back()->create(m_device, m_swapChain, params);
+        m_meshRenderer.back()->updateParams(params);
+        pass->create(m_device, m_swapChain);
     }
 
     notifyResize();
@@ -190,33 +184,16 @@ void DesktopApp::run()
         // pass->begin();
 
         m_swapChain->present([&](rhi::TexturePtr& backBuffer, rhi::CommandPtr& command) {
-            /*command->addImageBarrier(backBuffer, rhi::RenderTarget);
-            for (int i = 0; i < m_renderPasses.size(); ++i)
-            {
-                const auto& pass = m_renderPasses[i];
-                if(pass->startup())
-                {
-                    m_meshRenderer[i]->render(backBuffer, command, params);
-                    m_renderPasses[i]->render(backBuffer, command);
-                }
-            }
-            command->addImageBarrier(backBuffer, rhi::Present);*/
-
             command->addImageBarrier(backBuffer, rhi::RenderTarget);
-            for (const auto& pass : m_renderPasses)
+            for (const std::shared_ptr<rhi::IRenderPass>& pass : m_renderPasses)
                 pass->begin(backBuffer);
 
-            /*for (const auto& pass : m_renderPasses)
-                pass->render(backBuffer, command);*/
-
             for (int i = 0; i < m_renderPasses.size(); ++i)
             {
-                const auto& pass = m_renderPasses[i];
+                m_meshRenderer[i]->updateParams(params);
+                const std::shared_ptr<rhi::IRenderPass>& pass = m_renderPasses[i];
                 if (pass->startup())
-                {
-                    m_meshRenderer[i]->render(backBuffer, command, params);
-                    m_renderPasses[i]->render(backBuffer, command);
-                }
+                    pass->render(backBuffer, command);
             }
             command->addImageBarrier(backBuffer, rhi::Present);
         });
