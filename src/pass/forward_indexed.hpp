@@ -24,15 +24,15 @@ class ForwardIndexed : public render::RenderGraphPass
 
         rhi::PipelineDesc pso;
         pso.writeDepth = true;
-        pso.fillMode = rhi::RasterFillMode::Fill;
+        pso.fillMode = rhi::RasterFillMode::Line;
         pso.topology = rhi::PrimitiveType::TriangleList;
         pso.colorAttach.emplace_back(rhi::Format::RGBA8_UNORM);
         pso.depthAttach = rhi::Format::D32;
         pipeline = device->createGraphicsPipeline(modules, pso);
 
-        //graph.getResource(resources[2].handle, ubo);
-        //graph.getResource(resources[6].handle, drawsBuffer);
-        //graph.getResource(resources[7].handle, countBuffer);
+        // graph.getResource(resources[2].handle, ubo);
+        // graph.getResource(resources[6].handle, drawsBuffer);
+        // graph.getResource(resources[7].handle, countBuffer);
     }
     void resize(const rhi::DevicePtr& device, const rhi::Extent& viewport) override
     {
@@ -45,7 +45,7 @@ class ForwardIndexed : public render::RenderGraphPass
 
         ubo->uploadFromMemory(&constant, sizeof(render::DrawConstant));
 
-        //params.meshes->bind(cmd, false);
+        // params.meshes->bind(cmd, false);
         /*for(uint32_t i = 0; i < scene.getInstanceCount(); ++i)
         {
             const auto& draw = scene.getInstance(i);
@@ -72,6 +72,14 @@ class ForwardIndexed : public render::RenderGraphPass
     [[nodiscard]] std::string getName() const override
     {
         return "ForwardIndexed";
+    }
+
+    void createRenderResource(const rhi::DevicePtr& device, const render::RenderParams& params,
+                              render::RenderGraphTable& res) override
+    {
+        res.inputs.emplace_back();
+        res.inputs.back().name = "renderTarget";
+        res.inputs.back().type = render::RR_RenderTarget;
     }
 
     /*void getResourceDesc(render::RenderDesc& desc) override

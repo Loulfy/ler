@@ -23,6 +23,19 @@ ImVec2 operator-(const ImVec2& a, const ImVec2& b)
     return res;
 }
 
+
+ImGuiWindowFlags getWindowFlags()
+{
+    return
+        ImGuiWindowFlags_NoTitleBar |
+        ImGuiWindowFlags_NoResize |
+        ImGuiWindowFlags_NoMove |
+        ImGuiWindowFlags_NoScrollbar |
+        ImGuiWindowFlags_NoScrollWithMouse |
+        ImGuiWindowFlags_NoSavedSettings |
+        ImGuiWindowFlags_NoBringToFrontOnFocus;
+}
+
 void ImGuiEx_BeginColumn()
 {
     ImGui::BeginGroup();

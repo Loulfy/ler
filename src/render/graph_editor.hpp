@@ -77,6 +77,7 @@ struct LinkInfo
 
 ImVec2 operator+(const ImVec2& a, const ImVec2& b);
 ImVec2 operator-(const ImVec2& a, const ImVec2& b);
+ImGuiWindowFlags getWindowFlags();
 
 class FrameGraphEditor final : public rhi::IRenderPass
 {
@@ -122,12 +123,12 @@ class FrameGraphEditor final : public rhi::IRenderPass
 
             RenderGraphTable& res = node.resources;
             res.inputs.emplace_back();
-            res.inputs.back().name = "backBuffer";
+            res.inputs.back().name = "renderTarget";
             res.inputs.back().type = render::RR_RenderTarget;
             res.inputs.back().bindlessIndex = 33;
             res.inputs.back().linkGroup = 42;
 
-            res.outputs.emplace_back();
+            /*res.outputs.emplace_back();
             res.outputs.back().name = "backBuffer";
             res.outputs.back().type = render::RR_RenderTarget;
             res.outputs.back().bindlessIndex = 34;
@@ -137,7 +138,7 @@ class FrameGraphEditor final : public rhi::IRenderPass
             res.outputs.back().name = "albedo";
             res.outputs.back().type = render::RR_ConstantBuffer;
             res.outputs.back().bindlessIndex = 35;
-            res.outputs.back().linkGroup = 16;
+            res.outputs.back().linkGroup = 16;*/
         }
 
         {
@@ -254,7 +255,17 @@ class FrameGraphEditor final : public rhi::IRenderPass
     {
         auto& io = ImGui::GetIO();
 
-        ImGui::Begin("Test");
+        ImGui::SetNextWindowPos(ImVec2(0, 0));
+        ImGui::SetNextWindowSize(io.DisplaySize);
+        const auto windowBorderSize = ImGui::GetStyle().WindowBorderSize;
+        const auto windowRounding   = ImGui::GetStyle().WindowRounding;
+        ImGui::PushStyleVar(ImGuiStyleVar_WindowBorderSize, 0.0f);
+        ImGui::PushStyleVar(ImGuiStyleVar_WindowRounding, 0.0f);
+        ImGui::Begin("Content", nullptr, getWindowFlags());
+        ImGui::PushStyleVar(ImGuiStyleVar_WindowBorderSize, windowBorderSize);
+        ImGui::PushStyleVar(ImGuiStyleVar_WindowRounding, windowRounding);
+
+        //ImGui::Begin("Test");
         ImGui::Text("FPS: %.2f (%.2gms)", io.Framerate, 1000.0f / io.Framerate);
 
         ImGui::Separator();
@@ -427,7 +438,10 @@ class FrameGraphEditor final : public rhi::IRenderPass
 
         ed::End();
         ed::SetCurrentEditor(nullptr);
+
+        ImGui::PopStyleVar(2);
         ImGui::End();
+        ImGui::PopStyleVar(2);
     }
 
     bool IsPinLinked(ed::PinId id)
